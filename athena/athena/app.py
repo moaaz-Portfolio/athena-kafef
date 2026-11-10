@@ -117,7 +117,7 @@ class State:
 
 
     # --------------------------------------------------------- recording
-    def start_record(self, label, person, room, seconds):
+    def start_record(self, label, person, room, seconds, scenario=""):
         if self.calibration["status"] == "running":
             return "استنى لحد ما المعايرة تخلص"
         if self.rec["status"] not in ("idle", "done", "error"):
@@ -127,10 +127,10 @@ class State:
         if not data.safe_name(label) or not label.strip():
             return "choose a label"
         self._rec_stop.clear()
-        threading.Thread(target=self._record, args=(label, person, room, seconds), daemon=True).start()
+        threading.Thread(target=self._record, args=(label, person, room, seconds, scenario), daemon=True).start()
         return ""
 
-    def _record(self, label, person, room, seconds):
+    def _record(self, label, person, room, seconds, scenario=""):
         r = self.rec
         r.update(status="countdown", label=label, msg="", frames=0, left=3)
         for i in (3, 2, 1):
@@ -154,7 +154,7 @@ class State:
             r.update(status="error", msg="too few frames received - move the board closer to the router")
             return
         ts, rssi, amp = res
-        data.save_take(DATA_DIR, label, person, room, ts, rssi, amp)
+        data.save_take(DATA_DIR, label, person, room, ts, rssi, amp, scenario=scenario)
         rate = len(ts) / max(seconds, 1)
         r.update(status="done", msg=f"saved {len(ts)} frames ({rate:.0f}/s)", frames=len(ts))
 
@@ -260,7 +260,8 @@ def make_handler(state):
             err = ""
             if self.path == "/api/record":
                 err = state.start_record(str(body.get("label", "")), str(body.get("person", "")),
-                                         str(body.get("room", "")), max(5, min(300, int(body.get("seconds", 20)))))
+                                         str(body.get("room", "")), max(5, min(300, int(body.get("seconds", 20)))),
+                                         str(body.get("scenario", "")))
             elif self.path == "/api/record/stop":
                 state.stop_record()
             elif self.path == "/api/train":
