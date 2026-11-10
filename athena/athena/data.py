@@ -15,17 +15,19 @@ def safe_name(s):
     return re.sub(r"[^a-zA-Z0-9_-]+", "_", s.strip()).strip("_") or "x"
 
 
-def save_take(root, label, person, room, ts, rssi, amp):
+def save_take(root, label, person, room, ts, rssi, amp, scenario=""):
     label = safe_name(label)
     d = os.path.join(root, label)
     os.makedirs(d, exist_ok=True)
-    stem = f"{time.strftime('%Y%m%d-%H%M%S')}_{safe_name(person)}_{safe_name(room)}"
+    scenario = safe_name(scenario) if scenario else ""
+    suffix = f"_{scenario}" if scenario else ""
+    stem = f"{time.strftime('%Y%m%d-%H%M%S')}_{safe_name(person)}_{safe_name(room)}{suffix}"
     path, k = os.path.join(d, stem + ".npz"), 1
     while os.path.exists(path):                      # two takes in the same second must not overwrite
         k += 1
         path = os.path.join(d, f"{stem}-{k}.npz")
     np.savez_compressed(path, ts=ts, rssi=rssi, amp=amp, label=label,
-                        person=person or "", room=room or "")
+                        person=person or "", room=room or "", scenario=scenario)
     return path
 
 
@@ -134,7 +136,8 @@ def take_meta(path, label):
     """Label comes from the folder; room/person from the recording itself (lower-cased so 'Room1' == 'room1')."""
     z = np.load(path, allow_pickle=False)
     clean = lambda k: (str(z[k]).strip().lower() if k in z.files else "") or "unknown"
-    return {"path": path, "label": label, "room": clean("room"), "person": clean("person")}
+    return {"path": path, "label": label, "room": clean("room"), "person": clean("person"),
+            "scenario": clean("scenario")}
 
 
 def list_takes_meta(root):
