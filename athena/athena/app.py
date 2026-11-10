@@ -4,7 +4,7 @@ import os
 import threading
 import time
 import webbrowser
-from collections import deque
+from collections import Counter, deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
@@ -52,14 +52,13 @@ class State:
     def load_model(self):
         self.predictor, self.model_error = None, ""
         self.scenario_predictor, self.scenario_model_error = None, ""
-        if not os.path.exists(MODEL_PATH):
-            return
-        try:
-            self.predictor = Predictor(MODEL_PATH)
-        except ModuleNotFoundError:
-            self.model_error = "torch is not installed (pip install torch)"
-        except Exception as e:
-            self.model_error = f"could not load model: {e}"
+        if os.path.exists(MODEL_PATH):
+            try:
+                self.predictor = Predictor(MODEL_PATH)
+            except ModuleNotFoundError:
+                self.model_error = "torch is not installed (pip install torch)"
+            except Exception as e:
+                self.model_error = f"could not load model: {e}"
         if os.path.exists(SCENARIO_MODEL_PATH):
             try:
                 self.scenario_predictor = Predictor(SCENARIO_MODEL_PATH)
@@ -73,6 +72,7 @@ class State:
             time.sleep(0.5)
             if not self.rx.connected():
                 self.pred = None
+                self.scenario_pred = None
                 continue
             ts, amp = self.rx.recent(3.0)
             self.energy_hist.append(round(motion_energy(amp[-min(len(amp), 50):]), 3))
@@ -235,7 +235,7 @@ class State:
             t["log"].append(f"Scenarios: {scenario_counts}")
             metrics = train(DATA_DIR, MODEL_DIR, epochs=epochs, fs=FS, win=WIN,
                 dataset=(labels, splits, counts), model_filename="scenario_model.pt",
-                model_version="athena-scenario-1",
+                model_version="athena-scenario-1", metrics_filename="scenario_metrics.json",
                 log=lambda s: t["log"].append(s),
                 progress=lambda e, n: t.update(epoch=e, epochs=n),
                 should_stop=self._scenario_train_stop.is_set)
@@ -263,7 +263,7 @@ class State:
             "scenario_model": {"loaded": self.scenario_predictor is not None,
                 "error": self.scenario_model_error,
                 "labels": self.scenario_predictor.labels if self.scenario_predictor else []},
-            "scenario_counts": {name: count for name, count in __import__("collections").Counter(
+            "scenario_counts": {name: count for name, count in Counter(
                 m["scenario"] for m in data.list_takes_meta(DATA_DIR) if m["scenario"]).items()},
             "monitor": self.presence.snapshot(),
             "fall": self.fall_detector.snapshot(),
