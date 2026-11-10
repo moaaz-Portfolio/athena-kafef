@@ -133,11 +133,39 @@ GROUPS = ("room", "person")
 
 
 def take_meta(path, label):
-    """Label comes from the folder; room/person from the recording itself (lower-cased so 'Room1' == 'room1')."""
+    """Read metadata. Older recordings stored scenario names in the person field."""
     z = np.load(path, allow_pickle=False)
-    clean = lambda k: (str(z[k]).strip().lower() if k in z.files else "") or "unknown"
-    return {"path": path, "label": label, "room": clean("room"), "person": clean("person"),
-            "scenario": clean("scenario")}
+    clean = lambda k: (str(z[k]).strip().lower() if k in z.files else "")
+    person = clean("person") or "unknown"
+    scenario = clean("scenario")
+    # Backward compatibility for the four early trials recorded before the
+    # dedicated scenario field existed. Do not treat arbitrary person IDs as scenarios.
+    legacy_scenarios = {"another_person_walking", "another_person_crossing"}
+    if not scenario and person in legacy_scenarios:
+        scenario, person = person, "unknown"
+    return {"path": path, "label": label, "room": clean("room") or "unknown",
+            "person": person, "scenario": scenario}
+
+
+def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes=3):
+    """Build a separate dataset from explicitly tagged scenarios, never activity labels."""
+    metas = [m for m in list_takes_meta(root) if m["scenario"]]
+    by_scenario = {}
+    for m in metas:
+        by_scenario.setdefault(m["scenario"], []).append(m["path"])
+    if len(by_scenario) < 2:
+        raise DatasetError("Scenario training needs at least two named scenarios.")
+    short = {name: len(paths) for name, paths in by_scenario.items() if len(paths) < min_takes}
+    if short:
+        detail = ", ".join(f"{name}: {count}/{min_takes}" for name, count in sorted(short.items()))
+        raise DatasetError("Not enough recordings for scenario training (" + detail +
+                           "). Record at least 3 separate takes per scenario.")
+    labels = sorted(by_scenario)
+    split = split_takes(by_scenario)
+    out = {k: build_split(v, labels, fs, win, hop, normalize) for k, v in split.items()}
+    return labels, out, {k: len(v) for k, v in split.items()}, {
+        name: len(paths) for name, paths in sorted(by_scenario.items())
+    }
 
 
 def list_takes_meta(root):
