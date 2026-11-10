@@ -189,7 +189,7 @@ function draw(s){
  $('scenarioBig').textContent=sc&&s.connected?(sc.label==='uncertain'?'❓ '+t('uncertain')+' ('+sc.best+')':sc.label):(s.scenario_model?.loaded?'—':'لم يتم تدريب مصنف السيناريوهات بعد');
  const scCounts=s.scenario_counts||{};
  const scCountText=Object.entries(scCounts).map(([k,v])=>k+': '+v).join(' · ')||'لا توجد تسجيلات Scenario محفوظة';
- $('scenarioInfo').textContent=(s.scenario_model?.loaded?'مصنف السيناريوهات يعمل':'عدد التسجيلات: '+scCountText+' — يلزم 5 تسجيلات مستقلة على الأقل لكل سيناريو')+(s.scenario_model?.error?' · '+s.scenario_model.error:'');
+ $('scenarioInfo').textContent=(s.scenario_model?.loaded?'مصنف السيناريوهات يعمل':'عدد التسجيلات: '+scCountText+' — يلزم تسجيلان على الأقل لكل سيناريو')+(Object.values(scCounts).some(v=>v===2)?' · وضع تجريبي: التسجيل الثاني يُستخدم للتحقق والاختبار؛ الدقة أولية وليست تقييمًا بحثيًا موثوقًا.':'')+(s.scenario_model?.error?' · '+s.scenario_model.error:'');
  const scRun=scTrain.status==='running';
  $('stgo').disabled=scRun||!Object.keys(scCounts).length;
  $('ststop').disabled=!scRun;
