@@ -20,6 +20,7 @@ DATA_DIR = os.path.join(ROOT, "data")
 MODEL_DIR = os.path.join(ROOT, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "activity_model.pt")
 PRETRAINED = os.path.join(ROOT, "pretrained", "activity_model_esp_fi_har.pt")
+SCENARIO_MODEL_PATH = os.path.join(MODEL_DIR, "scenario_model.pt")
 FS, WIN = 50, 64
 
 
@@ -27,8 +28,11 @@ class State:
     def __init__(self, port):
         self.rx = CsiReceiver(port)
         self.predictor = None
+        self.scenario_predictor = None
         self.model_error = ""
+        self.scenario_model_error = ""
         self.pred = None
+        self.scenario_pred = None
         self.energy_hist = deque(maxlen=120)
         self.presence = PresenceMonitor(os.path.join(MODEL_DIR, "room_baseline.json"))
         self.fall_detector = FallEventDetector()
@@ -40,11 +44,14 @@ class State:
         # training
         self.train = {"status": "idle", "epoch": 0, "epochs": 0, "log": [], "metrics": None}
         self._train_stop = threading.Event()
+        self.scenario_train = {"status": "idle", "epoch": 0, "epochs": 0, "log": [], "metrics": None}
+        self._scenario_train_stop = threading.Event()
         self.load_model()
 
     # ------------------------------------------------------------- model
     def load_model(self):
         self.predictor, self.model_error = None, ""
+        self.scenario_predictor, self.scenario_model_error = None, ""
         if not os.path.exists(MODEL_PATH):
             return
         try:
@@ -53,6 +60,13 @@ class State:
             self.model_error = "torch is not installed (pip install torch)"
         except Exception as e:
             self.model_error = f"could not load model: {e}"
+        if os.path.exists(SCENARIO_MODEL_PATH):
+            try:
+                self.scenario_predictor = Predictor(SCENARIO_MODEL_PATH)
+            except ModuleNotFoundError:
+                self.scenario_model_error = "torch is not installed (pip install torch)"
+            except Exception as e:
+                self.scenario_model_error = f"could not load scenario model: {e}"
 
     def loop(self):
         while True:
@@ -72,6 +86,12 @@ class State:
                     self.pred = self.predictor.predict(p_ts, p_amp)
                 except Exception as e:
                     self.model_error = str(e)
+            if self.scenario_predictor:
+                try:
+                    s_ts, s_amp = self.rx.recent(self.scenario_predictor.seconds_needed + 0.5)
+                    self.scenario_pred = self.scenario_predictor.predict(s_ts, s_amp)
+                except Exception as e:
+                    self.scenario_model_error = str(e)
             self.fall_detector.update(
                 amp, pstate, self.pred,
                 self.presence.impact_threshold(), self.presence.quiet_threshold())
@@ -194,6 +214,41 @@ class State:
             t["log"].append(f"ERROR: {type(e).__name__}: {e}")
             t["status"] = "error"
 
+    def start_scenario_train(self, epochs):
+        if self.train["status"] == "running" or self.scenario_train["status"] == "running":
+            return "أوقف التدريب الحالي أولاً"
+        try:
+            import torch  # noqa: F401
+        except ModuleNotFoundError:
+            return "torch is not installed. Run: pip install torch"
+        self._scenario_train_stop.clear()
+        self.scenario_train.update(status="running", epoch=0, epochs=epochs, log=[], metrics=None)
+        threading.Thread(target=self._train_scenario, args=(epochs,), daemon=True).start()
+        return ""
+
+    def _train_scenario(self, epochs):
+        from .train import train
+        t = self.scenario_train
+        try:
+            dataset = data.load_scenario_dataset(DATA_DIR, fs=FS, win=WIN)
+            labels, splits, counts, scenario_counts = dataset
+            t["log"].append(f"Scenarios: {scenario_counts}")
+            metrics = train(DATA_DIR, MODEL_DIR, epochs=epochs, fs=FS, win=WIN,
+                dataset=(labels, splits, counts), model_filename="scenario_model.pt",
+                model_version="athena-scenario-1",
+                log=lambda s: t["log"].append(s),
+                progress=lambda e, n: t.update(epoch=e, epochs=n),
+                should_stop=self._scenario_train_stop.is_set)
+            t.update(status="done", metrics={"accuracy": metrics["test"]["accuracy"],
+                "macro_f1": metrics["test"]["macro_f1"], "per_class": metrics["test"]["per_class"]})
+            self.load_model()
+        except data.DatasetError as e:
+            t["log"].append(f"ERROR: {e}")
+            t["status"] = "error"
+        except Exception as e:
+            t["log"].append(f"ERROR: {type(e).__name__}: {e}")
+            t["status"] = "error"
+
     # ------------------------------------------------------------- state
     def snapshot(self):
         rx = self.rx
@@ -204,6 +259,12 @@ class State:
             "energy": list(self.energy_hist),
             "heat": last.astype(int).tolist(),
             "pred": self.pred,
+            "scenario_pred": self.scenario_pred,
+            "scenario_model": {"loaded": self.scenario_predictor is not None,
+                "error": self.scenario_model_error,
+                "labels": self.scenario_predictor.labels if self.scenario_predictor else []},
+            "scenario_counts": {name: count for name, count in __import__("collections").Counter(
+                m["scenario"] for m in data.list_takes_meta(DATA_DIR) if m["scenario"]).items()},
             "monitor": self.presence.snapshot(),
             "fall": self.fall_detector.snapshot(),
             "calibration": dict(self.calibration),
@@ -216,6 +277,7 @@ class State:
                       "pretrained_available": os.path.exists(PRETRAINED)},
             "rec": dict(self.rec),
             "train": {k: (v[-40:] if k == "log" else v) for k, v in self.train.items()},
+            "scenario_train": {k: (v[-40:] if k == "log" else v) for k, v in self.scenario_train.items()},
             "takes": data.summary(DATA_DIR),
         }
 
@@ -268,6 +330,10 @@ def make_handler(state):
                 err = state.start_train(max(1, min(200, int(body.get("epochs", 30)))), bool(body.get("pretrained")))
             elif self.path == "/api/train/stop":
                 state._train_stop.set()
+            elif self.path == "/api/train/scenario":
+                err = state.start_scenario_train(max(1, min(200, int(body.get("epochs", 30)))))
+            elif self.path == "/api/train/scenario/stop":
+                state._scenario_train_stop.set()
             elif self.path == "/api/label/delete":
                 data.delete_label(DATA_DIR, str(body.get("label", "")))
             elif self.path == "/api/model/reload":
