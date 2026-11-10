@@ -72,6 +72,16 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
 </div>
 
 <div class="card">
+  <h3 data-i="scenario_t"></h3>
+  <div id="scenarioBig" style="font-size:24px;font-weight:800;text-align:center;margin:10px 0">—</div>
+  <div class="hint" id="scenarioInfo"></div>
+  <button class="p" id="stgo" data-i="scenario_train_go"></button>
+  <button class="s" id="ststop" data-i="tr_stop"></button>
+  <div class="hint" id="stres"></div>
+  <pre id="stlog" style="display:none"></pre>
+</div>
+
+<div class="card">
   <h3 data-i="rec_t"></h3>
   <div class="g">
     <div><label data-i="act"></label><select id="lab"></select></div>
@@ -107,7 +117,7 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
 <script>
 const D={
 ar:{sub:"استشعار CSI · التواجد والحركة والسقوط",monitor_t:"المراقبة المتكاملة · CSI",presence_t:"التواجد في الغرفة",motion_t:"الحركة",fall_t:"اكتشاف السقوط",cal_go:"عاير الغرفة وهي فاضية (10 ثواني)",cal_stop:"إلغاء المعايرة",fall_ack:"تأكيد مراجعة التنبيه وإخفاؤه",activity_t:"تصنيف النشاط المدرّب",safety_note:"تنبيه بحثي: النتائج تقديرية وليست نظام إنقاذ أو جهازًا طبيًا. راجع أي تنبيه بشريًا ولا تعتمد عليه وحده.",no_stream:"مفيش بث",fall_model_ready:"فئة fall موجودة في الموديل المدرّب",fall_model_need:"فئة fall مش متدرّبة؛ التنبيه حاليًا قاعدي وتجريبي",pres_unknown:"غير محدد",pres_yes:"فيه وجود محتمل",pres_no:"الغرفة فاضية غالبًا",pres_uncal:"غير معاير",pres_score:"مؤشر التغير",pres_cal_hint:"افرغ الغرفة ثم ابدأ المعايرة",moving:"فيه حركة",still:"ثابت حاليًا",motion_level:"شدة الحركة",motion_score:"مؤشر الحركة",fall_alert:"اشتباه سقوط — تحقّق الآن",fall_check:"فحص نمط حركة",fall_ready:"لا توجد إشارة حاليًا",impact:"شدة التغير",fall_model_p:"احتمال الموديل",cal_running:"جاري معايرة الغرفة:",heat_h:"خريطة CSI: الصفوف = الزمن، الأعمدة = الـ 64 subcarrier. التغيّر في الألوان = حركة.",
- rec_t:"1) سجّل بياناتك",act:"النشاط",own:"أو اكتب نشاط جديد",person:"معرّف الشخص",scenario:"اسم التجربة (اختياري)",room:"المكان",secs:"مدة التسجيل (ثواني)",rec_go:"ابدأ التسجيل",rec_stop:"إلغاء",
+ scenario_t:"تمييز سيناريو المرور (منفصل عن نوع الحركة)",scenario_train_go:"درّب مصنف سيناريوهات المرور",rec_t:"1) سجّل بياناتك",act:"النشاط",own:"أو اكتب نشاط جديد",person:"معرّف الشخص",scenario:"اسم التجربة (اختياري)",room:"المكان",secs:"مدة التسجيل (ثواني)",rec_go:"ابدأ التسجيل",rec_stop:"إلغاء",
  rec_tip:"نصيحة: سجّل 10 مرات على الأقل لكل نشاط، وغيّر مكان وقوفك واتجاهك ووقت اليوم. لازم يكون فيه نشاط «empty» (الأوضة فاضية) عشان الموديل يعرف السكون.",
  tr_t:"2) درّب الموديل",epochs:"عدد الحقب",pre:"ابدأ من الموديل المدرّب القديم (تجريبي)",tr_go:"ابدأ التدريب",tr_stop:"إيقاف",
  takes:"المرات",secs_c:"ثواني",del:"مسح",
@@ -116,7 +126,7 @@ ar:{sub:"استشعار CSI · التواجد والحركة والسقوط",mon
  trun:"التدريب شغال…",
  h:{empty:"الأوضة فاضية تماماً",sitting_still:"قاعد ثابت",sitting_down:"الجلوس",lying_down:"استلقاء آمن على سطح لين",fall:"سقوط تجريبي آمن تحت إشراف",walking:"مشي طبيعي",running:"جري في المكان أو حواليه",jumping:"نط",squatting:"قرفصاء",arm_wave:"تلويح بالإيد",turning:"لف حوالين نفسك"}},
 en:{sub:"CSI sensing · presence, motion and fall events",monitor_t:"Integrated CSI monitor",presence_t:"Room presence",motion_t:"Motion",fall_t:"Fall detection",cal_go:"Calibrate empty room (10 seconds)",cal_stop:"Cancel calibration",fall_ack:"Acknowledge and hide alert",activity_t:"Trained activity classifier",safety_note:"Research prototype only. Results are estimates, not a medical or emergency safety system. Verify every alert in person.",no_stream:"No stream",fall_model_ready:"The trained model includes a fall class",fall_model_need:"No trained fall class; heuristic alerts are experimental",pres_unknown:"Unknown",pres_yes:"Possible presence",pres_no:"Likely empty",pres_uncal:"Not calibrated",pres_score:"Change score",pres_cal_hint:"Empty the room, then start calibration",moving:"Motion detected",still:"Currently still",motion_level:"Motion level",motion_score:"Motion score",fall_alert:"Possible fall — check now",fall_check:"Checking movement pattern",fall_ready:"No current indication",impact:"Change peak",fall_model_p:"Model probability",cal_running:"Calibrating room:",heat_h:"CSI heat-map: rows = time, columns = the 64 subcarriers. Colour changes = movement.",
- rec_t:"1) Record your data",act:"Activity",own:"or type a new one",person:"Person ID",scenario:"Experiment scenario (optional)",room:"Place",secs:"Duration (s)",rec_go:"Start recording",rec_stop:"Cancel",
+ scenario_t:"Passage scenario classifier (separate from activity)",scenario_train_go:"Train passage-scenario classifier",rec_t:"1) Record your data",act:"Activity",own:"or type a new one",person:"Person ID",scenario:"Experiment scenario (optional)",room:"Place",secs:"Duration (s)",rec_go:"Start recording",rec_stop:"Cancel",
  rec_tip:"Tip: record at least 10 takes per activity, changing where you stand, your direction and the time of day. Include an “empty” activity (nobody in the room) so the model knows stillness.",
  tr_t:"2) Train the model",epochs:"Epochs",pre:"Start from the old pretrained model (experimental)",tr_go:"Start training",tr_stop:"Stop",
  takes:"Takes",secs_c:"Seconds",del:"Delete",
@@ -175,6 +185,16 @@ function draw(s){
   bars.innerHTML=Object.entries(s.pred.probs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar"><span>${k}</span><div><i style="width:${(v*100).toFixed(0)}%"></i></div><span>${(v*100).toFixed(0)}%</span></div>`).join('');
  }else{big.textContent='…';big.className='u';bars.innerHTML=''}
  $('modelmsg').textContent=s.model.loaded?'':(s.model.error||t('nomodel'));
+ const sc=s.scenario_pred,scTrain=s.scenario_train||{};
+ $('scenarioBig').textContent=sc&&s.connected?(sc.label==='uncertain'?'❓ '+t('uncertain')+' ('+sc.best+')':sc.label):(s.scenario_model?.loaded?'—':'لم يتم تدريب مصنف السيناريوهات بعد');
+ const scCounts=s.scenario_counts||{};
+ const scCountText=Object.entries(scCounts).map(([k,v])=>k+': '+v).join(' · ')||'لا توجد تسجيلات Scenario محفوظة';
+ $('scenarioInfo').textContent=(s.scenario_model?.loaded?'مصنف السيناريوهات يعمل':'عدد التسجيلات: '+scCountText+' — يلزم 3 تسجيلات مستقلة على الأقل لكل سيناريو')+(s.scenario_model?.error?' · '+s.scenario_model.error:'');
+ const scRun=scTrain.status==='running';
+ $('stgo').disabled=scRun||!Object.keys(scCounts).length;
+ $('ststop').disabled=!scRun;
+ $('stres').textContent=scRun?'تدريب مصنف السيناريوهات جارٍ…':(scTrain.status==='done'&&scTrain.metrics?'انتهى التدريب · دقة الاختبار: '+(scTrain.metrics.accuracy*100).toFixed(1)+'%':scTrain.status==='error'?'تعذر التدريب؛ راجع التفاصيل أدناه.':'');
+ $('stlog').style.display=scTrain.log?.length?'':'none';$('stlog').textContent=(scTrain.log||[]).join('\\n');$('stlog').scrollTop=1e6;
  drawHeat(s.heat);drawEn(s.energy);
  // recorder
  const r=s.rec,busy=r.status=='countdown'||r.status=='recording';
@@ -199,6 +219,8 @@ $('rgo').onclick=async()=>{const label=($('labc').value.trim()||$('lab').value);
 $('rstop').onclick=()=>api('/api/record/stop',{});
 $('tgo').onclick=async()=>{const r=await api('/api/train',{epochs:+$('ep').value,pretrained:$('pre').checked});if(!r.ok)alert(r.error)};
 $('tstop').onclick=()=>api('/api/train/stop',{});
+$('stgo').onclick=async()=>{const r=await api('/api/train/scenario',{epochs:+$('ep').value});if(!r.ok)alert(r.error)};
+$('ststop').onclick=()=>api('/api/train/scenario/stop',{});
 $('calgo').onclick=async()=>{const r=await api('/api/calibrate',{seconds:10});if(!r.ok)alert(r.error)};
 $('calstop').onclick=()=>api('/api/calibrate/stop',{});
 $('fallack').onclick=()=>api('/api/fall/ack',{});
