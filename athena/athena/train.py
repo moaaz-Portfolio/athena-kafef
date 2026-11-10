@@ -28,7 +28,7 @@ def scores(m):
 def train(root, out_dir, epochs=30, fs=50, win=64, hop=16, init=None,
           log=print, progress=None, should_stop=lambda: False,
           dataset=None, normalize=True, save=True, model_filename="activity_model.pt",
-          model_version="athena-own-1"):
+          model_version="athena-own-1", metrics_filename="metrics.json"):
     """dataset=(labels, {train,val,test: (X, y)}, counts) lets crossval.py supply its own split;
     save=False evaluates without writing any file."""
     import torch
@@ -124,7 +124,7 @@ def train(root, out_dir, epochs=30, fs=50, win=64, hop=16, init=None,
         os.makedirs(out_dir, exist_ok=True)
         path = os.path.join(out_dir, model_filename)
         torch.save(ckpt, path)
-        write_json(os.path.join(out_dir, "metrics.json"), metrics)
+        write_json(os.path.join(out_dir, metrics_filename), metrics)
         log(f"TEST accuracy {acc:.3f}  macro-F1 {float(f1.mean()):.3f}  -> saved {path}")
     else:
         log(f"TEST accuracy {acc:.3f}  macro-F1 {float(f1.mean()):.3f}")
