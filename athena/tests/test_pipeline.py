@@ -93,7 +93,7 @@ def test_app():
     for label in ("empty", "walking"):
         fake_board.label = label
         for k in range(3):
-            r = call("/api/record", {"label": label, "person": "p", "room": "r", "seconds": 5})
+            r = call("/api/record", {"label": label, "person": "p", "room": "r", "scenario": "test_scenario", "seconds": 5})
             assert r["ok"], r
             # The recording worker starts asynchronously. Wait until this request
             # has actually entered countdown/recording before accepting its result;
@@ -117,6 +117,8 @@ def test_app():
     tk = data.list_takes(app.DATA_DIR)
     assert {k: len(v) for k, v in tk.items()} == {"empty": 3, "walking": 3}
     labels, ds, counts = data.load_dataset(app.DATA_DIR, 50, 64, 16)
+    sample = np.load(tk["empty"][0], allow_pickle=False)
+    assert str(sample["scenario"]) == "test_scenario"
     for k, (X, y) in ds.items():
         assert X.shape[1:] == (64, 64) and len(X) == len(y) > 0
     print("dataset ok:", labels, counts, {k: v[0].shape for k, v in ds.items()})
