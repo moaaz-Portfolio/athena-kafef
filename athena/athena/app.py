@@ -183,8 +183,8 @@ class State:
 
     # ----------------------------------------------------------- training
     def start_train(self, epochs, use_pretrained):
-        if self.train["status"] == "running":
-            return "already training"
+        if self.train["status"] == "running" or self.scenario_train["status"] == "running":
+            return "أوقف التدريب الحالي أولاً"
         try:
             import torch  # noqa: F401
         except ModuleNotFoundError:
