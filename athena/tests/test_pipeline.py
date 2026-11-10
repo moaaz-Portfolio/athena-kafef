@@ -143,14 +143,14 @@ def test_scenario_dataset():
         rng = np.random.default_rng(42)
         ts = np.arange(0, 6000, 20, dtype=np.int64)
         for scenario, offset in (("side_pass", 0.0), ("front_cross", 18.0)):
-            for take in range(3):
+            for take in range(5):
                 amp = (60 + offset + rng.normal(0, 4, (len(ts), 64))).clip(0, 255).astype(np.uint8)
                 data.save_take(root, "walking", f"P{take}", "living_room",
                                ts, np.full(len(ts), -55), amp, scenario=scenario)
         labels, splits, counts, scenario_counts = data.load_scenario_dataset(root)
         assert labels == ["front_cross", "side_pass"]
-        assert scenario_counts == {"front_cross": 3, "side_pass": 3}
-        assert counts == {"train": 2, "val": 2, "test": 2}
+        assert scenario_counts == {"front_cross": 5, "side_pass": 5}
+        assert counts == {"train": 6, "val": 2, "test": 2}
         assert all(x.shape[1:] == (64, 64) for x, _ in splits.values())
         print("scenario dataset ok:", scenario_counts, counts)
 
