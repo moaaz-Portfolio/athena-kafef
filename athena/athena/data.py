@@ -147,7 +147,7 @@ def take_meta(path, label):
             "person": person, "scenario": scenario}
 
 
-def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes=5):
+def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes=2):
     """Build a separate dataset from explicitly tagged scenarios, never activity labels."""
     metas = [m for m in list_takes_meta(root) if m["scenario"]]
     by_scenario = {}
@@ -159,9 +159,28 @@ def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes
     if short:
         detail = ", ".join(f"{name}: {count}/{min_takes}" for name, count in sorted(short.items()))
         raise DatasetError("Not enough recordings for scenario training (" + detail +
-                           "). Record at least 5 separate takes per scenario.")
+                           "). Record at least 2 separate takes per scenario.")
     labels = sorted(by_scenario)
-    split = split_takes(by_scenario)
+
+    # Experimental two-take mode: one recording per class is used for training.
+    # The second is reused for validation and test because three independent
+    # splits are impossible with only two recordings. Metrics are therefore
+    # preliminary and must not be reported as a reliable research evaluation.
+    split = {"train": [], "val": [], "test": []}
+    rng = random.Random(7)
+    for name, paths in sorted(by_scenario.items()):
+        paths = paths[:]
+        rng.shuffle(paths)
+        if len(paths) == 2:
+            split["train"].append((paths[0], name))
+            split["val"].append((paths[1], name))
+            split["test"].append((paths[1], name))
+        else:
+            n_test = max(1, round(len(paths) * 0.15))
+            n_val = max(1, round(len(paths) * 0.15))
+            split["test"] += [(p, name) for p in paths[:n_test]]
+            split["val"] += [(p, name) for p in paths[n_test:n_test + n_val]]
+            split["train"] += [(p, name) for p in paths[n_test + n_val:]]
     out = {k: build_split(v, labels, fs, win, hop, normalize) for k, v in split.items()}
     return labels, out, {k: len(v) for k, v in split.items()}, {
         name: len(paths) for name, paths in sorted(by_scenario.items())
