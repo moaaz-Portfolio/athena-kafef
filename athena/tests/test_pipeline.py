@@ -137,9 +137,38 @@ def test_app():
     print("summary", data.summary(app.DATA_DIR))
 
 
+def test_scenario_dataset():
+    root = tempfile.mkdtemp()
+    try:
+        rng = np.random.default_rng(42)
+        ts = np.arange(0, 6000, 20, dtype=np.int64)
+        for scenario, offset in (("side_pass", 0.0), ("front_cross", 18.0)):
+            for take in range(3):
+                amp = (60 + offset + rng.normal(0, 4, (len(ts), 64))).clip(0, 255).astype(np.uint8)
+                data.save_take(root, "walking", f"P{take}", "living_room",
+                               ts, np.full(len(ts), -55), amp, scenario=scenario)
+        labels, splits, counts, scenario_counts = data.load_scenario_dataset(root)
+        assert labels == ["front_cross", "side_pass"]
+        assert scenario_counts == {"front_cross": 3, "side_pass": 3}
+        assert counts == {"train": 2, "val": 2, "test": 2}
+        assert all(x.shape[1:] == (64, 64) for x, _ in splits.values())
+        print("scenario dataset ok:", scenario_counts, counts)
+
+        legacy = os.path.join(root, "walking", "legacy.npz")
+        np.savez_compressed(legacy, ts=ts, rssi=np.full(len(ts), -55),
+                            amp=np.ones((len(ts), 64), dtype=np.uint8),
+                            person="another_person_walking", room="living_room")
+        meta = data.take_meta(legacy, "walking")
+        assert meta["scenario"] == "another_person_walking"
+        print("legacy scenario metadata ok")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 if __name__ == "__main__":
     test_proto()
     test_resample()
+    test_scenario_dataset()
     test_app()
     shutil.rmtree(tmp, ignore_errors=True)
     print("ALL PASSED")
