@@ -147,7 +147,7 @@ def take_meta(path, label):
             "person": person, "scenario": scenario}
 
 
-def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes=3):
+def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes=5):
     """Build a separate dataset from explicitly tagged scenarios, never activity labels."""
     metas = [m for m in list_takes_meta(root) if m["scenario"]]
     by_scenario = {}
@@ -159,7 +159,7 @@ def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes
     if short:
         detail = ", ".join(f"{name}: {count}/{min_takes}" for name, count in sorted(short.items()))
         raise DatasetError("Not enough recordings for scenario training (" + detail +
-                           "). Record at least 3 separate takes per scenario.")
+                           "). Record at least 5 separate takes per scenario.")
     labels = sorted(by_scenario)
     split = split_takes(by_scenario)
     out = {k: build_split(v, labels, fs, win, hop, normalize) for k, v in split.items()}
