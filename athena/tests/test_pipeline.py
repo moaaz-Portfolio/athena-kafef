@@ -16,6 +16,7 @@ from athena import app, data, proto  # noqa: E402
 import fake_esp  # noqa: E402
 
 UDP, HTTP = 5611, 8611
+API_TOKEN = ""
 tmp = tempfile.mkdtemp()
 app.DATA_DIR = os.path.join(tmp, "data")
 app.MODEL_DIR = os.path.join(tmp, "models")
@@ -59,12 +60,14 @@ fake_board.label = "empty"
 
 def call(path, body=None):
     req = urllib.request.Request(f"http://127.0.0.1:{HTTP}{path}", data=None if body is None else json.dumps(body).encode(),
-                                 headers={"X-Athena": "1"} if body is not None else {})
+                                 headers={"Authorization": f"Bearer {API_TOKEN}"} if body is not None else {})
     return json.loads(urllib.request.urlopen(req, timeout=5).read())
 
 
 def test_app():
+    global API_TOKEN
     st = app.State(UDP)
+    API_TOKEN = st.api_token
     st.rx.start()
     threading.Thread(target=st.loop, daemon=True).start()
     from http.server import ThreadingHTTPServer
@@ -75,6 +78,7 @@ def test_app():
     time.sleep(2.5)
 
     s = call("/api/state")
+    assert call("/api/token")["token"] == API_TOKEN
     assert s["connected"] and s["fps"] > 40, s["fps"]
     assert len(s["heat"]) == 80 and len(s["heat"][0]) == 64
     print(f"live ok: {s['fps']} fps, loss {s['loss']}%")
@@ -84,9 +88,9 @@ def test_app():
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{HTTP}/api/record", data=b"{}"))
         raise SystemExit("POST without header must fail")
     except urllib.error.HTTPError as e:
-        assert e.code == 403
+        assert e.code == 401
     page = urllib.request.urlopen(f"http://127.0.0.1:{HTTP}/").read()
-    assert b"Athena" in page
+    assert b"WiFi Radar" in page
 
     # record 3 takes of 2 activities (7 s each, shortened by patching the countdown)
     orig_sleep = time.sleep
@@ -137,6 +141,21 @@ def test_app():
     print("summary", data.summary(app.DATA_DIR))
 
 
+def test_user_edition_is_inference_only():
+    st = app.State(UDP, edition="user")
+    assert st.edition == "user"
+    assert "Factory Edition" in st.start_record("walking", "P1", "R1", 20)
+    assert "Factory Edition" in st.start_train(5, False)
+    assert "Factory Edition" in st.start_scenario_train(5)
+    snapshot = st.snapshot()
+    assert snapshot["takes"] == {}
+    assert snapshot["rec"]["status"] == "disabled"
+    assert snapshot["train"]["status"] == "disabled"
+    assert snapshot["scenario_train"]["status"] == "disabled"
+    assert snapshot["model"]["loaded"] is False
+    print("User Edition inference-only guard ok")
+
+
 def test_scenario_dataset():
     root = tempfile.mkdtemp()
     try:
@@ -169,6 +188,7 @@ if __name__ == "__main__":
     test_proto()
     test_resample()
     test_scenario_dataset()
+    test_user_edition_is_inference_only()
     test_app()
     shutil.rmtree(tmp, ignore_errors=True)
     print("ALL PASSED")

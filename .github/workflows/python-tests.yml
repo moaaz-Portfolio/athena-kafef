@@ -1,0 +1,39 @@
+name: WiFi Radar Python checks
+
+on:
+  push:
+    branches:
+      - main
+      - "wifi-radar/**"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: athena/requirements.txt
+
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip numpy
+
+      - name: Run edition and monitoring tests
+        working-directory: athena
+        run: |
+          python tests/test_edition.py
+          python tests/test_monitor.py
+
+      - name: Run CSI pipeline integration test
+        working-directory: athena
+        run: python tests/test_pipeline.py

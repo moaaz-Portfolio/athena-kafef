@@ -59,10 +59,27 @@ class PresenceMonitor:
         x = np.asarray(amp, dtype=np.float32)
         if x.ndim != 2 or x.shape[1] != 64 or len(x) < 200:
             raise ValueError("محتاج 200 إطار CSI على الأقل لمعايرة الغرفة")
-        x = x[-min(len(x), 1600):]
+        # Use the full calibration session rather than only the final ~30 seconds.
+        # Split the session into temporal sections to identify major room changes.
         base = np.median(x, axis=0)
         mad = 1.4826 * np.median(np.abs(x - base[None, :]), axis=0)
         scale = np.maximum(mad, 1.5)
+        segment_size = max(100, len(x) // 10)
+        segment_medians = []
+        for start in range(0, len(x), segment_size):
+            part = x[start:start + segment_size]
+            if len(part) >= 100:
+                segment_medians.append(np.median(part, axis=0))
+        stability_score = max(
+            (float(np.median(np.abs(part_base - base) / scale))
+             for part_base in segment_medians),
+            default=0.0,
+        )
+        if stability_score > 5.0:
+            raise ValueError(
+                f"إشارة الغرفة غير مستقرة أثناء المعايرة (مؤشر التغير {stability_score:.1f}). "
+                "أفرغ الغرفة وثبّت الراوتر واللوحة ثم أعد المحاولة."
+            )
         motion_floor = float(np.median(np.std(x, axis=0)))
         delta = np.mean(np.abs(np.diff(x, axis=0)), axis=1)
         delta_floor = float(np.percentile(delta, 95)) if len(delta) else 0.5
@@ -84,7 +101,7 @@ class PresenceMonitor:
             self.status = "unknown"
             self._present_hits = self._empty_hits = 0
             self.last_error = ""
-        return {"frames": len(x), "calibrated_at": stamp}
+        return {"frames": len(x), "calibrated_at": stamp, "stability_score": round(stability_score, 3)}
 
     @property
     def calibrated(self):

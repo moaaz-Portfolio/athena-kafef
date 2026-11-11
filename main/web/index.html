@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>WiFi Radar</title>
 <style>
-:root{--bg:#0e1116;--card:#171b22;--line:#2a313c;--tx:#eef1f5;--mut:#8b95a5;--ac:#19c37d;--warn:#f5a524;--bad:#ff6b6b}
+:root{--bg:#f1f5f9;--card:#ffffff;--line:#d8e1ec;--tx:#14213d;--mut:#64748b;--ac:#2563eb;--warn:#d97706;--bad:#dc2626}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,Segoe UI,Tahoma,Arial,sans-serif;padding:16px;transition:background .25s}
-body.on{background:#0b2a1d}
+body.on{background:#eff6ff}
 .w{max-width:720px;margin:0 auto}
 .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
 h1{font-size:20px;margin:0}
@@ -24,23 +24,23 @@ canvas{width:100%;height:110px;display:block;margin-top:14px}
 .meta{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;color:var(--mut);font-size:12px;margin-top:8px}
 .tabs{display:flex;gap:6px;overflow-x:auto;margin-top:14px;padding-bottom:2px}
 .tabs button{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--mut);border-radius:10px;padding:9px 14px;font-size:14px;cursor:pointer}
-.tabs button.a{color:#04140c;background:var(--ac);border-color:var(--ac);font-weight:700}
+.tabs button.a{color:#ffffff;background:var(--ac);border-color:var(--ac);font-weight:700}
 .panel{display:none}.panel.a{display:block}
 .g{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:560px){.g{grid-template-columns:1fr}}
 label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
-input,select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:#0e1116;color:var(--tx);font-size:15px}
+input,select{width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--tx);font-size:15px}
 input[type=range]{padding:0;height:30px;accent-color:var(--ac)}
 input[type=color]{padding:2px;height:42px}
 input[type=checkbox]{width:20px;height:20px;accent-color:var(--ac)}
 .chk{display:flex;align-items:center;gap:10px;margin-top:12px}.chk label{margin:0;color:var(--tx);font-size:14px}
-button.p{background:var(--ac);color:#04140c;border:0;border-radius:10px;padding:12px 20px;font-weight:700;font-size:15px;cursor:pointer;margin-top:14px}
+button.p{background:var(--ac);color:#ffffff;border:0;border-radius:10px;padding:12px 20px;font-weight:700;font-size:15px;cursor:pointer;margin-top:14px}
 button.s{background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px;cursor:pointer;margin:6px 6px 0 0}
 button.d{border-color:var(--bad);color:var(--bad)}
 .pre{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .hint{color:var(--mut);font-size:12px;margin-top:6px}
 h3{margin:4px 0 0;font-size:15px}
-#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#222a35;border:1px solid var(--line);padding:10px 18px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#ffffff;border:1px solid var(--line);padding:10px 18px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 #toast.s{opacity:1}
 progress{width:100%;height:10px;margin-top:10px}
 .sep{height:1px;background:var(--line);margin:16px 0}
@@ -51,7 +51,7 @@ progress{width:100%;height:10px;margin-top:10px}
 <body>
 <div class="w">
  <div class="top">
-  <h1>📡 <span data-i="title"></span></h1>
+  <h1><span data-i="title"></span></h1>
   <div><span class="chip" id="net">…</span> <button class="s" id="lg" style="margin:0;padding:4px 10px">EN</button></div>
  </div>
 
