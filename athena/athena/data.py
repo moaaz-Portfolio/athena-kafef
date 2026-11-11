@@ -8,6 +8,7 @@ import time
 import numpy as np
 
 FEATURES = 64
+ACTIVITY_LABELS = ("empty_room", "person_static", "sitting", "movement")
 
 
 # --------------------------------------------------------------- saving
@@ -15,19 +16,19 @@ def safe_name(s):
     return re.sub(r"[^a-zA-Z0-9_-]+", "_", s.strip()).strip("_") or "x"
 
 
-def save_take(root, label, person, room, ts, rssi, amp, scenario=""):
+def save_take(root, label, person, room, ts, rssi, amp):
     label = safe_name(label)
+    if label not in ACTIVITY_LABELS:
+        raise ValueError(f"Unsupported activity label: {label}. Allowed: {', '.join(ACTIVITY_LABELS)}")
     d = os.path.join(root, label)
     os.makedirs(d, exist_ok=True)
-    scenario = safe_name(scenario) if scenario else ""
-    suffix = f"_{scenario}" if scenario else ""
-    stem = f"{time.strftime('%Y%m%d-%H%M%S')}_{safe_name(person)}_{safe_name(room)}{suffix}"
+    stem = f"{time.strftime('%Y%m%d-%H%M%S')}_{safe_name(person)}_{safe_name(room)}"
     path, k = os.path.join(d, stem + ".npz"), 1
-    while os.path.exists(path):                      # two takes in the same second must not overwrite
+    while os.path.exists(path):
         k += 1
         path = os.path.join(d, f"{stem}-{k}.npz")
     np.savez_compressed(path, ts=ts, rssi=rssi, amp=amp, label=label,
-                        person=person or "", room=room or "", scenario=scenario)
+                        person=person or "", room=room or "")
     return path
 
 
@@ -36,7 +37,7 @@ def list_takes(root):
     out = {}
     if not os.path.isdir(root):
         return out
-    for lab in sorted(os.listdir(root)):
+    for lab in ACTIVITY_LABELS:
         d = os.path.join(root, lab)
         if os.path.isdir(d):
             files = sorted(f for f in os.listdir(d) if f.endswith(".npz"))
@@ -122,8 +123,11 @@ def load_dataset(root, fs=50, win=64, hop=16, normalize=True):
     takes = list_takes(root)
     if len(takes) < 2:
         raise DatasetError("Record at least 2 different activities first.")
-    labels = sorted(takes)
-    split = split_takes(takes)
+    missing = [label for label in ACTIVITY_LABELS if label not in takes]
+    if missing:
+        raise DatasetError("Record all four required activities first. Missing: " + ", ".join(missing))
+    labels = list(ACTIVITY_LABELS)
+    split = split_takes({label: takes[label] for label in ACTIVITY_LABELS})
     out = {k: build_split(v, labels, fs, win, hop, normalize) for k, v in split.items()}
     return labels, out, {k: len(v) for k, v in split.items()}
 
@@ -137,54 +141,8 @@ def take_meta(path, label):
     z = np.load(path, allow_pickle=False)
     clean = lambda k: (str(z[k]).strip().lower() if k in z.files else "")
     person = clean("person") or "unknown"
-    scenario = clean("scenario")
-    # Backward compatibility for the four early trials recorded before the
-    # dedicated scenario field existed. Do not treat arbitrary person IDs as scenarios.
-    legacy_scenarios = {"another_person_walking", "another_person_crossing"}
-    if not scenario and person in legacy_scenarios:
-        scenario, person = person, "unknown"
     return {"path": path, "label": label, "room": clean("room") or "unknown",
-            "person": person, "scenario": scenario}
-
-
-def load_scenario_dataset(root, fs=50, win=64, hop=16, normalize=True, min_takes=2):
-    """Build a separate dataset from explicitly tagged scenarios, never activity labels."""
-    metas = [m for m in list_takes_meta(root) if m["scenario"]]
-    by_scenario = {}
-    for m in metas:
-        by_scenario.setdefault(m["scenario"], []).append(m["path"])
-    if len(by_scenario) < 2:
-        raise DatasetError("Scenario training needs at least two named scenarios.")
-    short = {name: len(paths) for name, paths in by_scenario.items() if len(paths) < min_takes}
-    if short:
-        detail = ", ".join(f"{name}: {count}/{min_takes}" for name, count in sorted(short.items()))
-        raise DatasetError("Not enough recordings for scenario training (" + detail +
-                           "). Record at least 2 separate takes per scenario.")
-    labels = sorted(by_scenario)
-
-    # Experimental two-take mode: one recording per class is used for training.
-    # The second is reused for validation and test because three independent
-    # splits are impossible with only two recordings. Metrics are therefore
-    # preliminary and must not be reported as a reliable research evaluation.
-    split = {"train": [], "val": [], "test": []}
-    rng = random.Random(7)
-    for name, paths in sorted(by_scenario.items()):
-        paths = paths[:]
-        rng.shuffle(paths)
-        if len(paths) == 2:
-            split["train"].append((paths[0], name))
-            split["val"].append((paths[1], name))
-            split["test"].append((paths[1], name))
-        else:
-            n_test = max(1, round(len(paths) * 0.15))
-            n_val = max(1, round(len(paths) * 0.15))
-            split["test"] += [(p, name) for p in paths[:n_test]]
-            split["val"] += [(p, name) for p in paths[n_test:n_test + n_val]]
-            split["train"] += [(p, name) for p in paths[n_test + n_val:]]
-    out = {k: build_split(v, labels, fs, win, hop, normalize) for k, v in split.items()}
-    return labels, out, {k: len(v) for k, v in split.items()}, {
-        name: len(paths) for name, paths in sorted(by_scenario.items())
-    }
+            "person": person}
 
 
 def list_takes_meta(root):
@@ -243,7 +201,10 @@ def summary(root):
 
 def delete_label(root, label):
     import shutil
-    d = os.path.join(root, safe_name(label))
+    label = safe_name(label)
+    if label not in ACTIVITY_LABELS:
+        raise ValueError(f"Unsupported activity label: {label}")
+    d = os.path.join(root, label)
     if os.path.isdir(d):
         shutil.rmtree(d)
 
