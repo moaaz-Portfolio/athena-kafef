@@ -16,6 +16,7 @@ from athena import app, data, proto  # noqa: E402
 import fake_esp  # noqa: E402
 
 UDP, HTTP = 5611, 8611
+API_TOKEN = ""
 tmp = tempfile.mkdtemp()
 app.DATA_DIR = os.path.join(tmp, "data")
 app.MODEL_DIR = os.path.join(tmp, "models")
@@ -59,12 +60,14 @@ fake_board.label = "empty"
 
 def call(path, body=None):
     req = urllib.request.Request(f"http://127.0.0.1:{HTTP}{path}", data=None if body is None else json.dumps(body).encode(),
-                                 headers={"X-Athena": "1"} if body is not None else {})
+                                 headers={"Authorization": f"Bearer {API_TOKEN}"} if body is not None else {})
     return json.loads(urllib.request.urlopen(req, timeout=5).read())
 
 
 def test_app():
+    global API_TOKEN
     st = app.State(UDP)
+    API_TOKEN = st.api_token
     st.rx.start()
     threading.Thread(target=st.loop, daemon=True).start()
     from http.server import ThreadingHTTPServer
@@ -84,9 +87,9 @@ def test_app():
         urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{HTTP}/api/record", data=b"{}"))
         raise SystemExit("POST without header must fail")
     except urllib.error.HTTPError as e:
-        assert e.code == 403
+        assert e.code == 401
     page = urllib.request.urlopen(f"http://127.0.0.1:{HTTP}/").read()
-    assert b"Athena" in page
+    assert b"WiFi Radar" in page
 
     # record 3 takes of 2 activities (7 s each, shortened by patching the countdown)
     orig_sleep = time.sleep
