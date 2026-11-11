@@ -1,6 +1,7 @@
 """Local web app: live view + guided recording + one-click training. Only needs numpy; torch for train/live."""
 import json
 import os
+import secrets
 import threading
 import time
 import webbrowser
@@ -41,6 +42,7 @@ class State:
         self.settings_path = os.path.join(MODEL_DIR, "settings.json")
         self.settings = load_settings(self.settings_path)
         self.events_path = os.path.join(MODEL_DIR, "events.jsonl")
+        self.api_token = self._load_api_token()
         self.event_log = deque(maxlen=100)
         self._was_connected = None
         self._last_presence = None
@@ -62,6 +64,20 @@ class State:
         self.load_model()
 
     # ------------------------------------------------------------- events/settings
+    def _load_api_token(self):
+        path = os.path.join(MODEL_DIR, "api_token.txt")
+        try:
+            with open(path, "r", encoding="utf-8") as stream:
+                token = stream.read().strip()
+                if token:
+                    return token
+        except FileNotFoundError:
+            pass
+        token = secrets.token_urlsafe(32)
+        with open(path, "w", encoding="utf-8") as stream:
+            stream.write(token)
+        return token
+
     def _load_event_log(self):
         try:
             with open(self.events_path, "r", encoding="utf-8") as stream:
@@ -402,6 +418,10 @@ def make_handler(state):
                 return self._json(state.snapshot())
             if self.path == "/api/config":
                 return self._json(state.configuration())
+            if self.path == "/api/token":
+                if self.client_address[0] not in ("127.0.0.1", "::1"):
+                    return self._json({"error": "local access only"}, 403)
+                return self._json({"token": state.api_token})
             if self.path == "/api/events":
                 return self._json({"events": list(state.event_log)})
             if self.path in ("/", "/index.html"):
@@ -415,8 +435,8 @@ def make_handler(state):
             self.send_error(404)
 
         def do_POST(self):
-            if self.headers.get("X-Athena") != "1":
-                return self._json({"ok": False, "error": "forbidden"}, 403)
+            if self.headers.get("Authorization") != f"Bearer {state.api_token}":
+                return self._json({"ok": False, "error": "unauthorized"}, 401)
             n = int(self.headers.get("Content-Length") or 0)
             try:
                 body = json.loads(self.rfile.read(n) or b"{}")
