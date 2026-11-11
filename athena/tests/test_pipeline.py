@@ -78,6 +78,7 @@ def test_app():
     time.sleep(2.5)
 
     s = call("/api/state")
+    assert call("/api/token")["token"] == API_TOKEN
     assert s["connected"] and s["fps"] > 40, s["fps"]
     assert len(s["heat"]) == 80 and len(s["heat"][0]) == 64
     print(f"live ok: {s['fps']} fps, loss {s['loss']}%")
