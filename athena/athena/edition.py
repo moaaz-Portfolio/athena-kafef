@@ -18,7 +18,7 @@ DEFAULT_NOTIFICATIONS = {
     "device_offline": True,
     "csi_quality": False,
 }
-DEFAULT_OUTPUTS = {"buzzer_enabled": True}
+DEFAULT_OUTPUTS = {"buzzer_enabled": False}
 
 
 def normalize_edition(value: str | None) -> str:
