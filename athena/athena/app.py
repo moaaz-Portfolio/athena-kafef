@@ -65,6 +65,7 @@ class State:
 
     # ------------------------------------------------------------- events/settings
     def _load_api_token(self):
+        os.makedirs(MODEL_DIR, exist_ok=True)
         path = os.path.join(MODEL_DIR, "api_token.txt")
         try:
             with open(path, "r", encoding="utf-8") as stream:
@@ -232,9 +233,19 @@ class State:
             if result_data is None:
                 raise ValueError("لم تصل بيانات CSI أثناء المعايرة")
             ts, _rssi, amp = result_data
+            if self.edition == USER:
+                minimum_frames = int(seconds * 15)
+                if len(ts) < minimum_frames:
+                    raise ValueError(
+                        f"بيانات CSI غير كافية: وصل {len(ts)} إطارًا، والمطلوب {minimum_frames} على الأقل. "
+                        "تحقق من قرب اللوحة وجودة الاتصال ثم أعد المعايرة."
+                    )
+                if len(ts) > 1 and (float(ts[-1]) - float(ts[0])) < seconds * 900:
+                    raise ValueError("جلسة المعايرة لم تغطِّ المدة المطلوبة؛ أعد المحاولة مع بث مستمر.")
             result = self.presence.calibrate(ts, amp)
             self.calibration.update(status="done", left=0,
-                                    message=f"تمت المعايرة باستخدام {result['frames']} إطار")
+                                    message=f"تمت المعايرة باستخدام {result['frames']} إطار · "
+                                            f"مؤشر الاستقرار {result['stability_score']}")
         except Exception as exc:
             self.calibration.update(status="error", left=0, message=str(exc))
 
