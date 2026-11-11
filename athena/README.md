@@ -59,7 +59,7 @@
 - مراجعة الباحث لنتائج كل فئة وConfusion Matrix والإنذارات الكاذبة.
 - موافقة صريحة من الباحث على إصدار الحزمة.
 
-من مجلد athena:
+من جذر المستودع (وليس داخل مجلد athena):
 
     python -m athena.package_user --version 1.0.0 --researcher-approved
 
