@@ -31,7 +31,7 @@ User Edition is the inference-only runtime. It loads a model trained and evaluat
 
 A user package can be created only after the checkpoint contains the four required semantic classes (empty room, person static, movement, and fall), test metrics are present, and a researcher explicitly approves release:
 
-    python -m athena.package_user --version 1.0.0 --researcher-approved
+    cd athena\npython -m athena.package_user --version 1.0.0 --researcher-approved
 
 This command creates dist/WiFi-Radar-User.zip. It excludes factory recordings and training code. It does not certify model accuracy: review per-class precision/recall/F1, confusion matrix, false alerts, and tests on held-out people and rooms before release.
 
@@ -67,7 +67,7 @@ The firmware exposes its own device API (including /api/status, /api/config, and
 Current committed sample recordings are exploratory only and do not constitute a trained four-class factory model. There are no real fall recordings in the initial sample set. Collect safe, supervised simulations and negative examples such as sitting down, bending, lying down, and dropping objects. Never ask anyone to perform an actual fall.
 
 See:
-- Factory/user release workflow: athena/EDITION_WORKFLOW.md
+- Factory/user release workflow: docs/EDITION_WORKFLOW.md
 - CSI experiments and evaluation: athena/EXPERIMENTS.md
 - Python application guide: athena/README.md
 - Android app guide: android-notifier/README_AR.md
