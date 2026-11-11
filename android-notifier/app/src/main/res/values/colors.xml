@@ -1,0 +1,8 @@
+<resources>
+    <color name="wifi_radar_navy">#14213D</color>
+    <color name="wifi_radar_blue">#2563EB</color>
+    <color name="wifi_radar_cyan">#38BDF8</color>
+    <color name="wifi_radar_white">#FFFFFF</color>
+    <color name="wifi_radar_background">#F1F5F9</color>
+    <color name="wifi_radar_muted">#64748B</color>
+</resources>
