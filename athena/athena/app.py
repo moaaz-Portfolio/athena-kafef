@@ -81,7 +81,7 @@ class State:
         try:
             os.makedirs(MODEL_DIR, exist_ok=True)
             with open(self.events_path, "a", encoding="utf-8") as stream:
-                stream.write(json.dumps(event, ensure_ascii=False) + "\\n")
+                stream.write(json.dumps(event, ensure_ascii=False) + "\n")
         except OSError:
             pass
 
@@ -360,8 +360,9 @@ class State:
             "scenario_model": {"loaded": self.scenario_predictor is not None,
                 "error": self.scenario_model_error,
                 "labels": self.scenario_predictor.labels if self.scenario_predictor else []},
-            "scenario_counts": {name: count for name, count in Counter(
-                m["scenario"] for m in data.list_takes_meta(DATA_DIR) if m["scenario"]).items()},
+            "scenario_counts": ({name: count for name, count in Counter(
+                m["scenario"] for m in data.list_takes_meta(DATA_DIR) if m["scenario"]).items()}
+                if self.is_factory else {}),
             "monitor": self.presence.snapshot(),
             "fall": self.fall_detector.snapshot(),
             "calibration": dict(self.calibration),
