@@ -29,7 +29,7 @@ jobs:
           esp_idf_version: v5.5
           target: esp32s3
           path: .
-          command: idf.py set-target esp32s3 && idf.py build && idf.py merge-bin -o build/merged.bin && test -s build/merged.bin && test -s build/esp32s3-wifi-radar.bin
+          command: idf.py set-target esp32s3 && idf.py build && idf.py merge-bin -o merged.bin && test -s build/merged.bin && test -s build/esp32s3-wifi-radar.bin
 
       - name: Collect firmware files
         shell: bash
