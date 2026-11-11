@@ -45,12 +45,13 @@ class MainActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, pad)
+            setBackgroundColor(0xFFF1F5F9.toInt())
         }
         val scroll = ScrollView(this).apply { addView(root) }
 
         root.addView(TextView(this).apply {
             text = "WiFi Radar"
-            textSize = 26f
+            textSize = 27f
             setTextColor(0xFF14213D.toInt())
         })
         root.addView(TextView(this).apply {
@@ -101,7 +102,7 @@ class MainActivity : Activity() {
 
         buzzer = CheckBox(this).apply {
             text = "السماح بتنبيه Buzzer عند ربط وحدة الباب"
-            isChecked = true
+            isChecked = false
         }
         root.addView(buzzer)
 
@@ -165,7 +166,7 @@ class MainActivity : Activity() {
                     switches.forEach { (key, check) ->
                         check.isChecked = notifications.optBoolean(key, true)
                     }
-                    buzzer.isChecked = outputs.optBoolean("buzzer_enabled", true)
+                    buzzer.isChecked = outputs.optBoolean("buzzer_enabled", false)
                     Toast.makeText(this, "تمت المزامنة مع ${result.optString("edition", "الجهاز")}", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
