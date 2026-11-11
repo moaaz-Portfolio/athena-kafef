@@ -1,0 +1,11 @@
+<resources>
+    <style name="WifiRadarTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">@color/wifi_radar_blue</item>
+        <item name="android:statusBarColor">@color/wifi_radar_background</item>
+        <item name="android:navigationBarColor">@color/wifi_radar_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/wifi_radar_background</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>
