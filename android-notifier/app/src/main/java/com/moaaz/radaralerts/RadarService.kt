@@ -25,6 +25,7 @@ class RadarService : Service() {
     private var previousPresence: String? = null
     private var wasFallAlert = false
     private var wasLowCsi = false
+    private var wasDoorPresent: Boolean? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -65,11 +66,13 @@ class RadarService : Service() {
             val presence = monitor.optString("status", "unknown")
             val fallAlert = fall.optString("status", "ready") == "alert"
             val lowCsi = state.optDouble("loss", 0.0) >= 10.0
+            val door = state.optJSONObject("door") ?: JSONObject()
+            val doorPresent = door.optString("status", "unknown") == "present"
 
             if (wasConnected == true && !connected && notifications.optBoolean("device_offline", true)) {
                 alert(201, "انقطع اتصال الجهاز", "تحقق من اتصال ESP32-S3 وجهاز المعالجة")
             }
-            if (wasMoving == false && moving && notifications.optBoolean("movement", true)) {
+            if (wasMoving != true && moving && notifications.optBoolean("movement", true)) {
                 alert(202, "تم اكتشاف حركة", "WiFi Radar رصد حركة داخل الغرفة")
             }
             if (previousPresence != "present" && presence == "present" &&
@@ -88,12 +91,18 @@ class RadarService : Service() {
             if (!wasLowCsi && lowCsi && notifications.optBoolean("csi_quality", false)) {
                 alert(206, "انخفاض جودة إشارة CSI", "فقد الحزم تجاوز 10%")
             }
+            if (wasDoorPresent != true && doorPresent &&
+                notifications.optBoolean("door_presence", true)
+            ) {
+                alert(207, "شخص عند الباب", "تم رصد وجود شخص أمام حساس الباب")
+            }
 
             wasConnected = connected
             wasMoving = moving
             previousPresence = presence
             wasFallAlert = fallAlert
             wasLowCsi = lowCsi
+            wasDoorPresent = doorPresent
         } catch (_: Exception) {
             if (wasConnected == true) {
                 val config = runCatching { getJson("$base/api/config") }.getOrNull()
