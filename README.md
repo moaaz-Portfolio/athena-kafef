@@ -1,86 +1,77 @@
-# 📡 ESP32-S3 WiFi Radar
+# WiFi Radar
 
-كاشف حركة بالواي فاي (Wi-Fi CSI) على **ESP32-S3** — من غير كاميرا ولا حساسات.
-Wi-Fi CSI motion sensor for **ESP32-S3** — no camera, no extra sensors.
+WiFi Radar is a research prototype for studying indoor presence and activity sensing using Wi-Fi Channel State Information (CSI). The CSI sensing path does not use a camera. This repository contains ESP32-S3 firmware, a Python CSI processing application, an Android notification app, and a factory-to-user model release workflow.
 
-مبني على مكتبة Espressif `esp_wifi_sensing` (ESP-CSI)، وفكرته مأخوذة من مشروع DrWalls (Apache-2.0).
-Built on Espressif's `esp_wifi_sensing`; inspired by DrWalls (Apache-2.0).
+> Research boundary: presence and fall detection are experimental estimates. This is not a medical device or an emergency/life-safety system. Do not use it as a substitute for direct supervision.
 
-## الميزات / Features
+## System architecture
 
-- **تنصيب من المتصفح** بزرار واحد (esp-web-tools) / one-click browser install
-- **بوابة إعداد** فيها قائمة شبكات + كابتيف بورتال / setup portal with network list
-- **لوحة تحكم عربي/إنجليزي** + رسم بياني لحظي / bilingual live dashboard
-- **حساسية الحركة والتواجد**، وقت الإبقاء، معايرة للأوضة / motion + presence tuning, calibration
-- **لمبة RGB (WS2812) أو GPIO LED**: لون وسطوع و GPIO من الصفحة
-- **مخرج ريلاي/بازر** على أي GPIO / relay-buzzer output
-- **MQTT + Home Assistant** (auto-discovery: motion + presence) و **Webhook**
-- **وضع Pair**: لوحتين S3 (مُرسل + حساس) بدون الاعتماد على الراوتر / two-board mode
-- **تحديث OTA** من الصفحة، وباسورد اختياري للوحة / OTA update + optional password
-- زرار **BOOT** 3 ثواني = نسيان الواي فاي
+1. ESP32-S3 CSI node — collects CSI frames and streams 64-subcarrier amplitude packets to a local processing computer over UDP (default port 5005).
+2. Local processing unit — runs the Python application, room baseline, trained activity model, event log, and local HTTP API (default port 8000).
+3. Web dashboard — displays room presence, movement, possible fall events, CSI quality, room calibration, notification preferences, and recent events.
+4. Android app — polls the local processing API and raises Android notifications according to preferences stored on the processing unit.
+5. Separate door node (planned integration) — an ESP32 with HC-SR04 and Buzzer. A single HC-SR04 can detect an object/person in its field of view; it cannot reliably determine entry versus exit. The current Python API reports the door node as not integrated until its dedicated firmware and bridge are completed.
 
-## التنصيب (من غير ما تثبّت أي حاجة)
+The CSI node and door node are separate systems. Their data can be presented together in WiFi Radar, but their sensing logic remains independent.
 
-1. اعمل Fork/Upload للمشروع على GitHub (branch `main`).
-2. من Settings → Pages اختار **Source: GitHub Actions**.
-3. الـ Action (`build.yml`) بيبني الفيرموير وينشر صفحة التنصيب على `https://<user>.github.io/<repo>/`.
-4. افتح الصفحة بـ Chrome/Edge، وصّل الـ S3 بـ USB، واضغط **Install**.
+## Factory Edition and User Edition
 
-## الاستخدام
+### Factory Edition
 
-1. بعد التنصيب اتصل بشبكة **S3-Radar-Setup**، اختار شبكتك واكتب الباسورد.
-2. افتح `http://<اسم-الجهاز>.local` (الاسم الافتراضي `s3radar-xxxxxx`).
-3. اضبط الحساسية، واعمل **معايرة** والأوضة فاضية.
+Factory Edition is the researcher's workstation mode. It enables CSI recording with activity/person/room metadata, dataset review, class management, model training, test metrics, cross-room and cross-person evaluation, and model release preparation.
 
-## البناء المحلي (اختياري) / Local build
+Launch from the athena directory:
 
-```bash
-idf.py set-target esp32s3
-idf.py build flash monitor
-```
-ESP-IDF 5.4 أو أحدث. المكتبات المُدارة بتتنزل تلقائياً.
+    pip install -r requirements.txt
+    python -m athena --edition factory
 
-## الـ GPIO الافتراضية (DevKitC-1)
+### User Edition
 
-| الوظيفة | GPIO |
-|---|---|
-| LED (WS2812) | 48 (بعض النسخ 38) — غيّرها من تبويب «المخرجات» |
-| زرار الريست للواي فاي | 0 (BOOT) |
-| ريلاي | معطّل افتراضياً |
+User Edition is the inference-only runtime. It loads a model trained and evaluated by the factory, disables factory recording and training endpoints, requires an empty-room calibration (10 minutes by default), saves a room-specific baseline separately from the trained model, and keeps local detection and event history on the processing unit.
 
-## وضع Pair (دقة أعلى)
+A user package can be created only after the checkpoint contains the four required semantic classes (empty room, person static, movement, and fall), test metrics are present, and a researcher explicitly approves release:
 
-1. لوحة 1: ثبّت الفيرموير واختار الدور **مُرسل** (تبويب الشبكة)، وانسخ الـ MAC بتاعها.
-2. لوحة 2: دور **حساس**، حط الـ MAC في «MAC اللوحة المساعدة»، واختار «مصدر الإشارة» = لوحة مساعدة.
-3. الاتنين لازم يكونوا على نفس شبكة الواي فاي. حطهم على جنبين مكان الحركة.
+    python -m athena.package_user --version 1.0.0 --researcher-approved
 
-## 🧠 تعرف على النشاط (Athena)
+This command creates dist/WiFi-Radar-User.zip. It excludes factory recordings and training code. It does not certify model accuracy: review per-class precision/recall/F1, confusion matrix, false alerts, and tests on held-out people and rooms before release.
 
-الدور الثالث للوحة «بث CSI للكمبيوتر» + أدوات Python في مجلد `athena/`. نسخة Athena 2.1 تضيف مراقبة تجريبية للتواجد والحركة، معايرة للغرفة وهي فارغة، وتنبيهًا احتماليًا لنمط قد يشبه السقوط بجانب تصنيف الأنشطة المدرّب. التفاصيل وخطوات المعايرة وحدود الدقة في `athena/README.md`.
+Run the packaged User Edition on a dedicated local processing computer:
 
-> **مهم:** تنبيهات التواجد والسقوط بحثية وتقديرية، وليست جهازًا طبيًا أو نظام إنقاذ. لا تعتمد عليها في حماية أي شخص دون تحقق بشري واختبارات مستقلة.
+    python -m athena --edition user --host 0.0.0.0
 
-## REST API
+The ESP32-S3 streams CSI to that computer. The processing hardware must be selected using measured model memory use, CPU inference latency, temperature, and sustained operation. The current PyTorch CNN/BiLSTM model is not assumed to run on the ESP32-S3 itself. A Raspberry Pi-class device or mini PC may be needed. A laptop is not required for the end user's normal operation when the dedicated processing unit is installed.
 
-| Endpoint | |
-|---|---|
-| `GET /api/status` | motion, presence, jitter, rssi… |
-| `GET/POST /api/config` | كل الإعدادات (JSON) |
-| `POST /api/calibrate` | `{"action":"start|stop|clear|baseline"}` |
-| `POST /api/ota` | body = ملف `esp32s3-wifi-radar.bin` |
+## Local networking and Android
 
-أي POST لازم يحمل الهيدر `X-Radar: 1` (حماية من CSRF). لو فعّلت باسورد: Basic Auth، المستخدم `admin`.
+- Keep the processing computer and phone on the same trusted local network for local Android notifications.
+- Open the dashboard on the processing computer, copy its local API token, and paste it into the Android app together with the processing computer URL.
+- The dashboard binds to 127.0.0.1 by default. Use --host 0.0.0.0 only on a trusted private LAN when the phone must connect.
+- Do not expose the processing API to the public internet or configure router port forwarding.
+- Local detection continues without internet. Notifications to a phone outside the local network require internet and a remote push delivery service; the current Android polling service is LAN-based.
 
-## Home Assistant
+## Room calibration
 
-فعّل MQTT واكتب عنوان الـ broker — بيظهر الجهاز تلقائياً بـ `Motion` و `Presence`.
+User Edition collects a 10-minute empty-room baseline. Calibration checks that sufficient CSI frames arrived and rejects major baseline shifts between time segments. Calibration is not model training. Recalibrate after changing the CSI node, router, or room layout. These checks are conservative engineering gates and still require validation in target rooms.
 
-## ملاحظات
+## Firmware installation
 
-- الكشف بيعتمد على مكان اللوحة والراوتر والغرفة؛ جرّب أماكن مختلفة.
-- تجنب GPIO 26–32 (فلاش/PSRAM) و19–20 (USB) للمخرجات.
-- التحديث من الصفحة: استخدم `esp32s3-wifi-radar.bin` مش الـ merged.
+The ESP32-S3 installer page and firmware build are in docs/ and .github/workflows/bulid.yml. Build locally with ESP-IDF 5.4+:
+
+    idf.py set-target esp32s3
+    idf.py build flash monitor
+
+The firmware exposes its own device API (including /api/status, /api/config, and /api/ota). This firmware API is distinct from the Python processing API (/api/state, /api/config, and /api/events).
+
+## Research data
+
+Current committed sample recordings are exploratory only and do not constitute a trained four-class factory model. There are no real fall recordings in the initial sample set. Collect safe, supervised simulations and negative examples such as sitting down, bending, lying down, and dropping objects. Never ask anyone to perform an actual fall.
+
+See:
+- Factory/user release workflow: athena/EDITION_WORKFLOW.md
+- CSI experiments and evaluation: athena/EXPERIMENTS.md
+- Python application guide: athena/README.md
+- Android app guide: android-notifier/README_AR.md
 
 ## License
 
-Apache-2.0. Uses Espressif ESP-CSI components; `components/dns_server` is from ESP-IDF examples (Unlicense/CC0).
+Apache-2.0. Uses Espressif ESP-CSI components; components/dns_server is from ESP-IDF examples (Unlicense/CC0).
