@@ -140,6 +140,21 @@ def test_app():
     print("summary", data.summary(app.DATA_DIR))
 
 
+def test_user_edition_is_inference_only():
+    st = app.State(UDP, edition="user")
+    assert st.edition == "user"
+    assert "Factory Edition" in st.start_record("walking", "P1", "R1", 20)
+    assert "Factory Edition" in st.start_train(5, False)
+    assert "Factory Edition" in st.start_scenario_train(5)
+    snapshot = st.snapshot()
+    assert snapshot["takes"] == {}
+    assert snapshot["rec"]["status"] == "disabled"
+    assert snapshot["train"]["status"] == "disabled"
+    assert snapshot["scenario_train"]["status"] == "disabled"
+    assert snapshot["model"]["loaded"] is False
+    print("User Edition inference-only guard ok")
+
+
 def test_scenario_dataset():
     root = tempfile.mkdtemp()
     try:
@@ -172,6 +187,7 @@ if __name__ == "__main__":
     test_proto()
     test_resample()
     test_scenario_dataset()
+    test_user_edition_is_inference_only()
     test_app()
     shutil.rmtree(tmp, ignore_errors=True)
     print("ALL PASSED")
