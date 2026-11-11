@@ -17,22 +17,23 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install ESP-IDF 5.5
-        uses: espressif/install-esp-idf-action@v1
         with:
-          version: "v5.5"
+          submodules: recursive
 
-      - name: Build firmware for ESP32-S3
+      - name: Build firmware for ESP32-S3 with Espressif CI
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5
+          target: esp32s3
+          path: .
+          command: idf.py set-target esp32s3 && idf.py build && idf.py merge-bin -o build/merged.bin && test -s build/merged.bin && test -s build/esp32s3-wifi-radar.bin
+
+      - name: Collect firmware files
         shell: bash
         run: |
-          idf.py set-target esp32s3
-          idf.py build
-          idf.py merge-bin -o build/merged.bin
-          test -s build/merged.bin
-          test -s build/esp32s3-wifi-radar.bin
           mkdir -p docs/firmware
           cp build/merged.bin docs/firmware/radar-s3-merged.bin
           cp build/esp32s3-wifi-radar.bin docs/firmware/esp32s3-wifi-radar.bin
