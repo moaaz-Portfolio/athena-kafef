@@ -13,6 +13,7 @@ from . import data
 from .live import Predictor, motion_energy
 from .receiver import CsiReceiver
 from .monitor import PresenceMonitor, FallEventDetector
+from .edition import FACTORY, USER, load_settings, normalize_edition, save_settings, update_preferences
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -25,7 +26,9 @@ FS, WIN = 50, 64
 
 
 class State:
-    def __init__(self, port):
+    def __init__(self, port, edition=FACTORY):
+        self.edition = normalize_edition(edition)
+        self.is_factory = self.edition == FACTORY
         self.rx = CsiReceiver(port)
         self.predictor = None
         self.scenario_predictor = None
@@ -35,6 +38,16 @@ class State:
         self.scenario_pred = None
         self.energy_hist = deque(maxlen=120)
         self.presence = PresenceMonitor(os.path.join(MODEL_DIR, "room_baseline.json"))
+        self.settings_path = os.path.join(MODEL_DIR, "settings.json")
+        self.settings = load_settings(self.settings_path)
+        self.events_path = os.path.join(MODEL_DIR, "events.jsonl")
+        self.event_log = deque(maxlen=100)
+        self._was_connected = None
+        self._last_presence = None
+        self._last_motion = None
+        self._last_fall_signature = None
+        self._last_csi_warning = False
+        self._load_event_log()
         self.fall_detector = FallEventDetector()
         self.calibration = {"status": "idle", "left": 0, "message": ""}
         self._calibration_stop = threading.Event()
@@ -47,6 +60,63 @@ class State:
         self.scenario_train = {"status": "idle", "epoch": 0, "epochs": 0, "log": [], "metrics": None}
         self._scenario_train_stop = threading.Event()
         self.load_model()
+
+    # ------------------------------------------------------------- events/settings
+    def _load_event_log(self):
+        try:
+            with open(self.events_path, "r", encoding="utf-8") as stream:
+                for line in stream.readlines()[-100:]:
+                    try:
+                        self.event_log.append(json.loads(line))
+                    except ValueError:
+                        continue
+        except FileNotFoundError:
+            pass
+
+    def log_event(self, event_type, message, details=None):
+        event = {"id": time.time_ns(), "type": event_type,
+                 "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                 "message": message, "details": details or {}}
+        self.event_log.append(event)
+        try:
+            os.makedirs(MODEL_DIR, exist_ok=True)
+            with open(self.events_path, "a", encoding="utf-8") as stream:
+                stream.write(json.dumps(event, ensure_ascii=False) + "\\n")
+        except OSError:
+            pass
+
+    def configuration(self):
+        return {"edition": self.edition,
+                "notifications": dict(self.settings["notifications"]),
+                "outputs": dict(self.settings["outputs"])}
+
+    def update_configuration(self, payload):
+        if not isinstance(payload, dict):
+            raise ValueError("settings must be an object")
+        for section in ("notifications", "outputs"):
+            if section in payload:
+                update_preferences(self.settings, section, payload[section])
+        save_settings(self.settings_path, self.settings)
+        return self.configuration()
+
+    def _track_state_events(self, pstate, fall_state):
+        presence = pstate.get("status", "unknown")
+        motion = pstate.get("motion", "unknown")
+        if presence != self._last_presence:
+            if presence == "present":
+                self.log_event("presence", "تم رصد وجود محتمل داخل الغرفة")
+            elif presence == "empty":
+                self.log_event("empty_room", "الغرفة تبدو فارغة")
+            self._last_presence = presence
+        if motion == "moving" and self._last_motion != "moving":
+            self.log_event("movement", "تم رصد حركة داخل الغرفة")
+        self._last_motion = motion
+        event = fall_state.get("event") if fall_state else None
+        if event:
+            signature = (event.get("time"), event.get("method"), event.get("message"))
+            if signature != self._last_fall_signature:
+                self.log_event("fall", "اشتباه سقوط — يلزم التحقق البشري", event)
+                self._last_fall_signature = signature
 
     # ------------------------------------------------------------- model
     def load_model(self):
@@ -70,10 +140,17 @@ class State:
     def loop(self):
         while True:
             time.sleep(0.5)
-            if not self.rx.connected():
+            connected = self.rx.connected()
+            if not connected:
+                if self._was_connected is not False:
+                    self.log_event("device_offline", "انقطع استقبال بيانات ESP32-S3")
+                self._was_connected = False
                 self.pred = None
                 self.scenario_pred = None
                 continue
+            if self._was_connected is False:
+                self.log_event("device_online", "عاد استقبال بيانات ESP32-S3")
+            self._was_connected = True
             ts, amp = self.rx.recent(3.0)
             self.energy_hist.append(round(motion_energy(amp[-min(len(amp), 50):]), 3))
             if len(amp) >= 30:
@@ -92,12 +169,22 @@ class State:
                     self.scenario_pred = self.scenario_predictor.predict(s_ts, s_amp)
                 except Exception as e:
                     self.scenario_model_error = str(e)
-            self.fall_detector.update(
+            fall_state = self.fall_detector.update(
                 amp, pstate, self.pred,
                 self.presence.impact_threshold(), self.presence.quiet_threshold())
+            self._track_state_events(pstate, fall_state)
+            quality_warning = self.rx.loss_pct() >= 10.0
+            if quality_warning and not self._last_csi_warning:
+                self.log_event("csi_quality", "فقد حزم CSI تجاوز 10%",
+                               {"loss_percent": round(self.rx.loss_pct(), 1)})
+            self._last_csi_warning = quality_warning
 
     # ------------------------------------------------------- calibration
-    def start_calibration(self, seconds=10):
+    def start_calibration(self, seconds=None):
+        if seconds is None:
+            seconds = 600 if self.edition == USER else 10
+        if self.edition == USER:
+            seconds = 600
         if not self.rx.connected():
             return "لا يوجد بث CSI من اللوحة"
         if self.calibration["status"] == "running":
@@ -138,6 +225,8 @@ class State:
 
     # --------------------------------------------------------- recording
     def start_record(self, label, person, room, seconds, scenario=""):
+        if not self.is_factory:
+            return "تسجيل البيانات متاح في Factory Edition فقط"
         if self.calibration["status"] == "running":
             return "استنى لحد ما المعايرة تخلص"
         if self.rec["status"] not in ("idle", "done", "error"):
@@ -183,6 +272,8 @@ class State:
 
     # ----------------------------------------------------------- training
     def start_train(self, epochs, use_pretrained):
+        if not self.is_factory:
+            return "التدريب متاح في Factory Edition فقط"
         if self.train["status"] == "running" or self.scenario_train["status"] == "running":
             return "أوقف التدريب الحالي أولاً"
         try:
@@ -215,6 +306,8 @@ class State:
             t["status"] = "error"
 
     def start_scenario_train(self, epochs):
+        if not self.is_factory:
+            return "التدريب متاح في Factory Edition فقط"
         if self.train["status"] == "running" or self.scenario_train["status"] == "running":
             return "أوقف التدريب الحالي أولاً"
         try:
@@ -254,6 +347,10 @@ class State:
         rx = self.rx
         last = rx.last_n(80)
         return {
+            "edition": self.edition,
+            "notifications": dict(self.settings["notifications"]),
+            "outputs": dict(self.settings["outputs"]),
+            "events": list(self.event_log),
             "connected": rx.connected(), "fps": round(rx.fps(), 1), "loss": round(rx.loss_pct(), 1),
             "rssi": rx.rssi, "port": rx.port, "error": rx.error,
             "energy": list(self.energy_hist),
@@ -275,10 +372,11 @@ class State:
                       "labels": self.predictor.labels if self.predictor else [],
                       "threshold": self.predictor.threshold if self.predictor else 0.65,
                       "pretrained_available": os.path.exists(PRETRAINED)},
-            "rec": dict(self.rec),
-            "train": {k: (v[-40:] if k == "log" else v) for k, v in self.train.items()},
-            "scenario_train": {k: (v[-40:] if k == "log" else v) for k, v in self.scenario_train.items()},
-            "takes": data.summary(DATA_DIR),
+            "door": {"connected": False, "status": "not_integrated"},
+            "rec": dict(self.rec) if self.is_factory else {"status": "disabled", "msg": "Factory only"},
+            "train": {k: (v[-40:] if k == "log" else v) for k, v in self.train.items()} if self.is_factory else {"status": "disabled", "epoch": 0, "epochs": 0, "log": [], "metrics": None},
+            "scenario_train": {k: (v[-40:] if k == "log" else v) for k, v in self.scenario_train.items()} if self.is_factory else {"status": "disabled", "epoch": 0, "epochs": 0, "log": [], "metrics": None},
+            "takes": data.summary(DATA_DIR) if self.is_factory else {},
         }
 
 
@@ -301,6 +399,10 @@ def make_handler(state):
         def do_GET(self):
             if self.path == "/api/state":
                 return self._json(state.snapshot())
+            if self.path == "/api/config":
+                return self._json(state.configuration())
+            if self.path == "/api/events":
+                return self._json({"events": list(state.event_log)})
             if self.path in ("/", "/index.html"):
                 b = open(html_path, "rb").read()
                 self.send_response(200)
@@ -320,6 +422,15 @@ def make_handler(state):
             except Exception:
                 return self._json({"ok": False, "error": "bad json"}, 400)
             err = ""
+            factory_routes = {"/api/record", "/api/record/stop", "/api/train", "/api/train/stop",
+                              "/api/train/scenario", "/api/train/scenario/stop", "/api/label/delete"}
+            if self.path in factory_routes and not state.is_factory:
+                return self._json({"ok": False, "error": "Factory Edition only"}, 403)
+            if self.path == "/api/config":
+                try:
+                    return self._json({"ok": True, **state.update_configuration(body)})
+                except ValueError as exc:
+                    return self._json({"ok": False, "error": str(exc)}, 400)
             if self.path == "/api/record":
                 err = state.start_record(str(body.get("label", "")), str(body.get("person", "")),
                                          str(body.get("room", "")), max(5, min(300, int(body.get("seconds", 20)))),
@@ -339,7 +450,8 @@ def make_handler(state):
             elif self.path == "/api/model/reload":
                 state.load_model()
             elif self.path == "/api/calibrate":
-                err = state.start_calibration(max(8, min(20, int(body.get("seconds", 10)))))
+                requested = None if state.edition == USER else max(8, min(600, int(body.get("seconds", 10))))
+                err = state.start_calibration(requested)
             elif self.path == "/api/calibrate/stop":
                 state._calibration_stop.set()
             elif self.path == "/api/fall/ack":
@@ -351,15 +463,17 @@ def make_handler(state):
     return H
 
 
-def run(port_udp=5005, port_http=8000, open_browser=True):
+def run(port_udp=5005, port_http=8000, open_browser=True, edition=FACTORY, host="127.0.0.1"):
     os.makedirs(DATA_DIR, exist_ok=True)
     os.makedirs(MODEL_DIR, exist_ok=True)
-    st = State(port_udp)
+    st = State(port_udp, edition=edition)
     st.rx.start()
     threading.Thread(target=st.loop, daemon=True).start()
-    srv = ThreadingHTTPServer(("127.0.0.1", port_http), make_handler(st))
-    url = f"http://127.0.0.1:{port_http}"
-    print(f"Athena is running:  {url}\n(listening for the ESP32-S3 on UDP {port_udp})   Ctrl+C to quit")
+    srv = ThreadingHTTPServer((host, port_http), make_handler(st))
+    display_host = "127.0.0.1" if host in ("0.0.0.0", "") else host
+    url = f"http://{display_host}:{port_http}"
+    print(f"WiFi Radar {st.edition.title()} Edition is running: {url}\n"
+          f"Listening for the ESP32-S3 on UDP {port_udp}; bind host: {host}. Ctrl+C to quit")
     if open_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
