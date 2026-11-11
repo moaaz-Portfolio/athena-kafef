@@ -21,17 +21,12 @@ APP = ROOT / "athena"
 MODEL_DIR = APP / "models"
 MODEL_PATH = MODEL_DIR / "activity_model.pt"
 METRICS_PATH = MODEL_DIR / "metrics.json"
-REQUIRED_GROUPS = {
-    "empty_room": {"empty", "room_empty", "empty_room"},
-    "person_static": {"sitting_still", "person_static", "still", "static"},
-    "movement": {"movement", "walking", "moving"},
-    "fall": {"fall", "falling", "fall_event", "fall_detected", "fall_detection"},
-}
+REQUIRED_LABELS = {"empty_room", "person_static", "sitting", "movement"}
 RUNTIME_FILES = [
     "athena/__init__.py", "athena/__main__.py", "athena/app.py",
     "athena/data.py", "athena/edition.py", "athena/live.py",
     "athena/model.py", "athena/monitor.py", "athena/proto.py",
-    "athena/receiver.py", "athena/static/index.html", "requirements.txt",
+    "athena/receiver.py", "athena/door.py", "athena/static/index.html", "requirements.txt",
 ]
 
 
@@ -54,16 +49,17 @@ def validate_model() -> tuple[list[str], dict]:
     except Exception as exc:
         raise SystemExit(f"Could not load factory model: {exc}") from exc
     labels = [str(x).strip().lower() for x in checkpoint.get("labels", [])]
-    missing = [name for name, aliases in REQUIRED_GROUPS.items()
-               if not aliases.intersection(labels)]
-    if missing:
-        raise SystemExit("Model is missing required classes: " + ", ".join(missing))
+    if len(labels) != 4 or set(labels) != REQUIRED_LABELS:
+        raise SystemExit("User release requires exactly these four classes: " +
+                         ", ".join(sorted(REQUIRED_LABELS)))
     try:
         metrics = json.loads(METRICS_PATH.read_text(encoding="utf-8"))
     except Exception as exc:
         raise SystemExit(f"Could not read test metrics: {exc}") from exc
     if not isinstance(metrics.get("test"), dict) or not isinstance(metrics["test"].get("per_class"), dict):
         raise SystemExit("Metrics file does not contain per-class test results.")
+    if set(metrics["test"]["per_class"]) != REQUIRED_LABELS:
+        raise SystemExit("Test metrics must report exactly all four approved classes.")
     # Do not certify model quality automatically: packaging is allowed only after
     # a researcher has reviewed the results and consciously approved release.
     return labels, metrics

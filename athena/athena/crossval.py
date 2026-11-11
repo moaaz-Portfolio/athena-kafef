@@ -55,7 +55,7 @@ class CentroidBaseline:
 
 
 # ------------------------------------------------------------------------------- metrics
-def presence_rates(cm, labels, empty="empty"):
+def presence_rates(cm, labels, empty="empty_room"):
     """Presence = anything that is not the 'empty' class.
     false_alarm_rate: empty room reported as occupied.  miss_rate: occupied room reported as empty."""
     if empty not in labels:

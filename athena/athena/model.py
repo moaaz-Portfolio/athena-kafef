@@ -1,11 +1,10 @@
-"""CNN + BiLSTM + attention. Layer names/shapes match the pretrained 'athena-cnn-bilstm' file,
-so its weights can optionally be used as a starting point."""
+"""Four-class CNN + BiLSTM + attention activity classifier."""
 import torch
 import torch.nn as nn
 
 
 class ActivityNet(nn.Module):
-    def __init__(self, n_feat=64, n_cls=7, drop=0.3):
+    def __init__(self, n_feat=64, n_cls=4, drop=0.3):
         super().__init__()
         self.encoder = nn.Sequential(
             nn.Conv1d(n_feat, 64, 5, padding=2), nn.BatchNorm1d(64), nn.ReLU(), nn.Dropout(drop * 0.3),
@@ -21,13 +20,3 @@ class ActivityNet(nn.Module):
         a = torch.softmax(self.attention(h), dim=1)
         return self.head((a * h).sum(dim=1))
 
-
-def load_pretrained(model, path):
-    """Copy every layer whose shape matches (the class head is skipped). Returns #tensors copied."""
-    ck = torch.load(path, map_location="cpu", weights_only=True)
-    src = ck["state_dict"] if "state_dict" in ck else ck
-    dst = model.state_dict()
-    ok = {k: v for k, v in src.items()
-          if k in dst and dst[k].shape == v.shape and not k.startswith("head.3")}
-    model.load_state_dict(ok, strict=False)
-    return len(ok)

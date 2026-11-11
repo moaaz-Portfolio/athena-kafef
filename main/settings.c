@@ -56,6 +56,9 @@ void settings_defaults(settings_t *o)
     o->out_gpio = -1;
     o->out_active_high = true;
     o->out_hold_s = 5;
+    o->door_enabled = true;
+    o->buzzer_enabled = false; /* enable after wiring via the dashboard */
+    o->door_threshold_cm = 100;
 
     strcpy(o->lang, "ar");
 
@@ -91,6 +94,9 @@ cJSON *settings_to_json(const settings_t *c, bool secrets)
     cJSON_AddNumberToObject(o, "out_gpio", c->out_gpio);
     cJSON_AddBoolToObject(o, "out_active_high", c->out_active_high);
     cJSON_AddNumberToObject(o, "out_hold_s", c->out_hold_s);
+    cJSON_AddBoolToObject(o, "door_enabled", c->door_enabled);
+    cJSON_AddBoolToObject(o, "buzzer_enabled", c->buzzer_enabled);
+    cJSON_AddNumberToObject(o, "door_threshold_cm", c->door_threshold_cm);
     cJSON_AddStringToObject(o, "lang", c->lang);
     cJSON_AddBoolToObject(o, "mqtt_en", c->mqtt_en);
     cJSON_AddStringToObject(o, "mqtt_host", c->mqtt_host);
@@ -198,6 +204,9 @@ void settings_apply_json(settings_t *c, const cJSON *j, bool trusted)
     c->out_gpio = (int8_t)clampi(item(j, "out_gpio"), -1, 48, c->out_gpio);
     c->out_active_high = getb(item(j, "out_active_high"), c->out_active_high);
     c->out_hold_s = (uint16_t)clampi(item(j, "out_hold_s"), 0, 3600, c->out_hold_s);
+    c->door_enabled = getb(item(j, "door_enabled"), c->door_enabled);
+    c->buzzer_enabled = getb(item(j, "buzzer_enabled"), c->buzzer_enabled);
+    c->door_threshold_cm = (uint16_t)clampi(item(j, "door_threshold_cm"), 20, 300, c->door_threshold_cm);
 
     if (get_str(j, "lang", tmp, 3) && (!strcmp(tmp, "ar") || !strcmp(tmp, "en"))) strlcpy(c->lang, tmp, sizeof(c->lang));
 

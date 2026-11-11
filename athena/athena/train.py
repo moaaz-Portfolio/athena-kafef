@@ -25,7 +25,7 @@ def scores(m):
     return prec, rec, f1, float(tp.sum() / max(m.sum(), 1))
 
 
-def train(root, out_dir, epochs=30, fs=50, win=64, hop=16, init=None,
+def train(root, out_dir, epochs=30, fs=50, win=64, hop=16,
           log=print, progress=None, should_stop=lambda: False,
           dataset=None, normalize=True, save=True, model_filename="activity_model.pt",
           model_version="athena-own-1", metrics_filename="metrics.json"):
@@ -33,7 +33,7 @@ def train(root, out_dir, epochs=30, fs=50, win=64, hop=16, init=None,
     save=False evaluates without writing any file."""
     import torch
     import torch.nn as nn
-    from .model import ActivityNet, load_pretrained
+    from .model import ActivityNet
 
     labels, data, counts = dataset if dataset is not None else load_dataset(root, fs, win, hop, normalize)
     (Xtr, ytr), (Xva, yva), (Xte, yte) = data["train"], data["val"], data["test"]
@@ -47,8 +47,6 @@ def train(root, out_dir, epochs=30, fs=50, win=64, hop=16, init=None,
     ytr_t = torch.from_numpy(ytr).to(dev)
 
     model = ActivityNet(FEATURES, len(labels)).to(dev)
-    if init and os.path.exists(init):
-        log(f"initialised {load_pretrained(model, init)} tensors from the pretrained model")
 
     cnt = np.bincount(ytr, minlength=len(labels)).astype(float)
     w = torch.tensor(cnt.sum() / np.maximum(cnt, 1) / len(labels), dtype=torch.float32, device=dev)

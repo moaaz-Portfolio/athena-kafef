@@ -19,6 +19,7 @@
 #include "sensing.h"
 #include "notify.h"
 #include "csi_stream.h"
+#include "door_sensor.h"
 
 static const char *TAG = "web";
 
@@ -143,6 +144,8 @@ static esp_err_t status_handler(httpd_req_t *req)
     const settings_t *c = settings_get();
     sensing_snapshot_t sn;
     sensing_get(&sn);
+    door_sensor_snapshot_t door;
+    door_sensor_get(&door);
 
     uint8_t mac[6];
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
@@ -176,6 +179,12 @@ static esp_err_t status_handler(httpd_req_t *req)
     cJSON_AddBoolToObject(o, "train_valid", sn.train_valid);
     cJSON_AddBoolToObject(o, "mqtt", notify_mqtt_connected());
     cJSON_AddNumberToObject(o, "csi_sent", csi_stream_sent());
+    cJSON_AddBoolToObject(o, "door_enabled", door.enabled);
+    cJSON_AddBoolToObject(o, "door_sensor_ok", door.sensor_ok);
+    cJSON_AddBoolToObject(o, "door_valid", door.distance_valid);
+    cJSON_AddBoolToObject(o, "door_present", door.present);
+    cJSON_AddNumberToObject(o, "door_distance_cm", door.distance_cm);
+    cJSON_AddBoolToObject(o, "buzzer_active", door.buzzer_active);
     return send_json(req, o);
 }
 

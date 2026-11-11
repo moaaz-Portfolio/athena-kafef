@@ -5,7 +5,7 @@ import secrets
 import threading
 import time
 import webbrowser
-from collections import Counter, deque
+from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import numpy as np
@@ -13,6 +13,7 @@ import numpy as np
 from . import data
 from .live import Predictor, motion_energy
 from .receiver import CsiReceiver
+from .door import DoorReceiver
 from .monitor import PresenceMonitor, FallEventDetector
 from .edition import FACTORY, USER, load_settings, normalize_edition, save_settings, update_preferences
 
@@ -21,8 +22,6 @@ ROOT = os.path.dirname(HERE)
 DATA_DIR = os.path.join(ROOT, "data")
 MODEL_DIR = os.path.join(ROOT, "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "activity_model.pt")
-PRETRAINED = os.path.join(ROOT, "pretrained", "activity_model_esp_fi_har.pt")
-SCENARIO_MODEL_PATH = os.path.join(MODEL_DIR, "scenario_model.pt")
 FS, WIN = 50, 64
 
 
@@ -31,12 +30,10 @@ class State:
         self.edition = normalize_edition(edition)
         self.is_factory = self.edition == FACTORY
         self.rx = CsiReceiver(port)
+        self.door_rx = DoorReceiver(port=port + 1 if port < 65535 else 5006)
         self.predictor = None
-        self.scenario_predictor = None
         self.model_error = ""
-        self.scenario_model_error = ""
         self.pred = None
-        self.scenario_pred = None
         self.energy_hist = deque(maxlen=120)
         self.presence = PresenceMonitor(os.path.join(MODEL_DIR, "room_baseline.json"))
         self.settings_path = os.path.join(MODEL_DIR, "settings.json")
@@ -49,6 +46,7 @@ class State:
         self._last_motion = None
         self._last_fall_signature = None
         self._last_csi_warning = False
+        self._last_door_presence = False
         self._load_event_log()
         self.fall_detector = FallEventDetector()
         self.calibration = {"status": "idle", "left": 0, "message": ""}
@@ -59,8 +57,6 @@ class State:
         # training
         self.train = {"status": "idle", "epoch": 0, "epochs": 0, "log": [], "metrics": None}
         self._train_stop = threading.Event()
-        self.scenario_train = {"status": "idle", "epoch": 0, "epochs": 0, "log": [], "metrics": None}
-        self._scenario_train_stop = threading.Event()
         self.load_model()
 
     # ------------------------------------------------------------- events/settings
@@ -138,32 +134,34 @@ class State:
     # ------------------------------------------------------------- model
     def load_model(self):
         self.predictor, self.model_error = None, ""
-        self.scenario_predictor, self.scenario_model_error = None, ""
         if os.path.exists(MODEL_PATH):
             try:
-                self.predictor = Predictor(MODEL_PATH)
+                candidate = Predictor(MODEL_PATH)
+                if set(candidate.labels) != set(data.ACTIVITY_LABELS) or len(candidate.labels) != 4:
+                    self.model_error = "The loaded model must contain exactly the four approved activity classes."
+                else:
+                    self.predictor = candidate
             except ModuleNotFoundError:
                 self.model_error = "torch is not installed (pip install torch)"
             except Exception as e:
                 self.model_error = f"could not load model: {e}"
-        if os.path.exists(SCENARIO_MODEL_PATH):
-            try:
-                self.scenario_predictor = Predictor(SCENARIO_MODEL_PATH)
-            except ModuleNotFoundError:
-                self.scenario_model_error = "torch is not installed (pip install torch)"
-            except Exception as e:
-                self.scenario_model_error = f"could not load scenario model: {e}"
 
     def loop(self):
         while True:
             time.sleep(0.5)
+            door = self.door_rx.snapshot()
+            current_door_presence = bool(door["connected"] and door["present"])
+            if current_door_presence != self._last_door_presence:
+                if current_door_presence:
+                    self.log_event("door_presence", "تم رصد شخص عند الباب بواسطة HC-SR04",
+                                   {"distance_cm": door.get("distance_cm")})
+                self._last_door_presence = current_door_presence
             connected = self.rx.connected()
             if not connected:
                 if self._was_connected is not False:
                     self.log_event("device_offline", "انقطع استقبال بيانات ESP32-S3")
                 self._was_connected = False
                 self.pred = None
-                self.scenario_pred = None
                 continue
             if self._was_connected is False:
                 self.log_event("device_online", "عاد استقبال بيانات ESP32-S3")
@@ -180,12 +178,6 @@ class State:
                     self.pred = self.predictor.predict(p_ts, p_amp)
                 except Exception as e:
                     self.model_error = str(e)
-            if self.scenario_predictor:
-                try:
-                    s_ts, s_amp = self.rx.recent(self.scenario_predictor.seconds_needed + 0.5)
-                    self.scenario_pred = self.scenario_predictor.predict(s_ts, s_amp)
-                except Exception as e:
-                    self.scenario_model_error = str(e)
             fall_state = self.fall_detector.update(
                 amp, pstate, self.pred,
                 self.presence.impact_threshold(), self.presence.quiet_threshold())
@@ -251,7 +243,7 @@ class State:
 
 
     # --------------------------------------------------------- recording
-    def start_record(self, label, person, room, seconds, scenario=""):
+    def start_record(self, label, person, room, seconds):
         if not self.is_factory:
             return "تسجيل البيانات متاح في Factory Edition فقط"
         if self.calibration["status"] == "running":
@@ -260,13 +252,14 @@ class State:
             return "already recording"
         if not self.rx.connected():
             return "no CSI stream - is the board in 'CSI stream' mode and on the same Wi-Fi?"
-        if not data.safe_name(label) or not label.strip():
-            return "choose a label"
+        label = data.safe_name(label)
+        if label not in data.ACTIVITY_LABELS:
+            return "اختار واحدة من الحالات الأربع المعتمدة فقط"
         self._rec_stop.clear()
-        threading.Thread(target=self._record, args=(label, person, room, seconds, scenario), daemon=True).start()
+        threading.Thread(target=self._record, args=(label, person, room, seconds), daemon=True).start()
         return ""
 
-    def _record(self, label, person, room, seconds, scenario=""):
+    def _record(self, label, person, room, seconds):
         r = self.rec
         r.update(status="countdown", label=label, msg="", frames=0, left=3)
         for i in (3, 2, 1):
@@ -290,7 +283,7 @@ class State:
             r.update(status="error", msg="too few frames received - move the board closer to the router")
             return
         ts, rssi, amp = res
-        data.save_take(DATA_DIR, label, person, room, ts, rssi, amp, scenario=scenario)
+        data.save_take(DATA_DIR, label, person, room, ts, rssi, amp)
         rate = len(ts) / max(seconds, 1)
         r.update(status="done", msg=f"saved {len(ts)} frames ({rate:.0f}/s)", frames=len(ts))
 
@@ -298,10 +291,10 @@ class State:
         self._rec_stop.set()
 
     # ----------------------------------------------------------- training
-    def start_train(self, epochs, use_pretrained):
+    def start_train(self, epochs):
         if not self.is_factory:
             return "التدريب متاح في Factory Edition فقط"
-        if self.train["status"] == "running" or self.scenario_train["status"] == "running":
+        if self.train["status"] == "running":
             return "أوقف التدريب الحالي أولاً"
         try:
             import torch  # noqa: F401
@@ -309,58 +302,20 @@ class State:
             return "torch is not installed. Run:  pip install torch"
         self._train_stop.clear()
         self.train.update(status="running", epoch=0, epochs=epochs, log=[], metrics=None)
-        threading.Thread(target=self._train, args=(epochs, use_pretrained), daemon=True).start()
+        threading.Thread(target=self._train, args=(epochs,), daemon=True).start()
         return ""
 
-    def _train(self, epochs, use_pretrained):
+    def _train(self, epochs):
         from .train import train
         t = self.train
         try:
             m = train(DATA_DIR, MODEL_DIR, epochs=epochs, fs=FS, win=WIN,
-                      init=PRETRAINED if use_pretrained else None,
                       log=lambda s: t["log"].append(s),
                       progress=lambda e, n: t.update(epoch=e, epochs=n),
                       should_stop=self._train_stop.is_set)
             t.update(status="done", metrics={"accuracy": m["test"]["accuracy"],
                                              "macro_f1": m["test"]["macro_f1"],
                                              "per_class": m["test"]["per_class"]})
-            self.load_model()
-        except data.DatasetError as e:
-            t["log"].append(f"ERROR: {e}")
-            t["status"] = "error"
-        except Exception as e:
-            t["log"].append(f"ERROR: {type(e).__name__}: {e}")
-            t["status"] = "error"
-
-    def start_scenario_train(self, epochs):
-        if not self.is_factory:
-            return "التدريب متاح في Factory Edition فقط"
-        if self.train["status"] == "running" or self.scenario_train["status"] == "running":
-            return "أوقف التدريب الحالي أولاً"
-        try:
-            import torch  # noqa: F401
-        except ModuleNotFoundError:
-            return "torch is not installed. Run: pip install torch"
-        self._scenario_train_stop.clear()
-        self.scenario_train.update(status="running", epoch=0, epochs=epochs, log=[], metrics=None)
-        threading.Thread(target=self._train_scenario, args=(epochs,), daemon=True).start()
-        return ""
-
-    def _train_scenario(self, epochs):
-        from .train import train
-        t = self.scenario_train
-        try:
-            dataset = data.load_scenario_dataset(DATA_DIR, fs=FS, win=WIN)
-            labels, splits, counts, scenario_counts = dataset
-            t["log"].append(f"Scenarios: {scenario_counts}")
-            metrics = train(DATA_DIR, MODEL_DIR, epochs=epochs, fs=FS, win=WIN,
-                dataset=(labels, splits, counts), model_filename="scenario_model.pt",
-                model_version="athena-scenario-1", metrics_filename="scenario_metrics.json",
-                log=lambda s: t["log"].append(s),
-                progress=lambda e, n: t.update(epoch=e, epochs=n),
-                should_stop=self._scenario_train_stop.is_set)
-            t.update(status="done", metrics={"accuracy": metrics["test"]["accuracy"],
-                "macro_f1": metrics["test"]["macro_f1"], "per_class": metrics["test"]["per_class"]})
             self.load_model()
         except data.DatasetError as e:
             t["log"].append(f"ERROR: {e}")
@@ -383,13 +338,7 @@ class State:
             "energy": list(self.energy_hist),
             "heat": last.astype(int).tolist(),
             "pred": self.pred,
-            "scenario_pred": self.scenario_pred,
-            "scenario_model": {"loaded": self.scenario_predictor is not None,
-                "error": self.scenario_model_error,
-                "labels": self.scenario_predictor.labels if self.scenario_predictor else []},
-            "scenario_counts": ({name: count for name, count in Counter(
-                m["scenario"] for m in data.list_takes_meta(DATA_DIR) if m["scenario"]).items()}
-                if self.is_factory else {}),
+            "door": self.door_rx.snapshot(),
             "monitor": self.presence.snapshot(),
             "fall": self.fall_detector.snapshot(),
             "calibration": dict(self.calibration),
@@ -398,12 +347,9 @@ class State:
             "model": {"loaded": self.predictor is not None, "error": self.model_error,
                       "version": self.predictor.version if self.predictor else "",
                       "labels": self.predictor.labels if self.predictor else [],
-                      "threshold": self.predictor.threshold if self.predictor else 0.65,
-                      "pretrained_available": os.path.exists(PRETRAINED)},
-            "door": {"connected": False, "status": "not_integrated"},
+                      "threshold": self.predictor.threshold if self.predictor else 0.65},
             "rec": dict(self.rec) if self.is_factory else {"status": "disabled", "msg": "Factory only"},
             "train": {k: (v[-40:] if k == "log" else v) for k, v in self.train.items()} if self.is_factory else {"status": "disabled", "epoch": 0, "epochs": 0, "log": [], "metrics": None},
-            "scenario_train": {k: (v[-40:] if k == "log" else v) for k, v in self.scenario_train.items()} if self.is_factory else {"status": "disabled", "epoch": 0, "epochs": 0, "log": [], "metrics": None},
             "takes": data.summary(DATA_DIR) if self.is_factory else {},
         }
 
@@ -454,8 +400,7 @@ def make_handler(state):
             except Exception:
                 return self._json({"ok": False, "error": "bad json"}, 400)
             err = ""
-            factory_routes = {"/api/record", "/api/record/stop", "/api/train", "/api/train/stop",
-                              "/api/train/scenario", "/api/train/scenario/stop", "/api/label/delete"}
+            factory_routes = {"/api/record", "/api/record/stop", "/api/train", "/api/train/stop", "/api/label/delete"}
             if self.path in factory_routes and not state.is_factory:
                 return self._json({"ok": False, "error": "Factory Edition only"}, 403)
             if self.path == "/api/config":
@@ -465,18 +410,13 @@ def make_handler(state):
                     return self._json({"ok": False, "error": str(exc)}, 400)
             if self.path == "/api/record":
                 err = state.start_record(str(body.get("label", "")), str(body.get("person", "")),
-                                         str(body.get("room", "")), max(5, min(300, int(body.get("seconds", 20)))),
-                                         str(body.get("scenario", "")))
+                                         str(body.get("room", "")), max(5, min(300, int(body.get("seconds", 20)))))
             elif self.path == "/api/record/stop":
                 state.stop_record()
             elif self.path == "/api/train":
-                err = state.start_train(max(1, min(200, int(body.get("epochs", 30)))), bool(body.get("pretrained")))
+                err = state.start_train(max(1, min(200, int(body.get("epochs", 30)))))
             elif self.path == "/api/train/stop":
                 state._train_stop.set()
-            elif self.path == "/api/train/scenario":
-                err = state.start_scenario_train(max(1, min(200, int(body.get("epochs", 30)))))
-            elif self.path == "/api/train/scenario/stop":
-                state._scenario_train_stop.set()
             elif self.path == "/api/label/delete":
                 data.delete_label(DATA_DIR, str(body.get("label", "")))
             elif self.path == "/api/model/reload":
@@ -500,6 +440,7 @@ def run(port_udp=5005, port_http=8000, open_browser=True, edition=FACTORY, host=
     os.makedirs(MODEL_DIR, exist_ok=True)
     st = State(port_udp, edition=edition)
     st.rx.start()
+    st.door_rx.start()
     threading.Thread(target=st.loop, daemon=True).start()
     srv = ThreadingHTTPServer((host, port_http), make_handler(st))
     display_host = "127.0.0.1" if host in ("0.0.0.0", "") else host

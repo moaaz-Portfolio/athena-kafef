@@ -9,13 +9,15 @@ Both editions use the same signal format, feature pipeline, model architecture, 
 
 ## Model classes required for a user release
 
-The release packager checks for these four semantic classes (the labels may use approved aliases):
-1. Empty room
-2. Person present and static
-3. Movement
-4. Fall
+The release packager requires exactly these four activity classes:
+1. `empty_room` — nobody is in the room.
+2. `person_static` — a person standing still.
+3. `sitting` — a person sitting still.
+4. `movement` — a person moving.
 
-A package is not created if a class or the independent test metrics are missing. This is a structural release gate, not proof of accuracy. The researcher must review per-class precision, recall, F1, confusion matrix, and false-alert behavior on held-out people and rooms before approving release.
+Fall-event heuristics remain separate and are not a fifth trained class. The Factory UI and API reject any other activity label. Three independent recordings per class are a technical minimum only; use more people, rooms, sessions, and days for research evaluation.
+
+A package is not created if any class or independent test metrics are missing. This is a structural release gate, not proof of accuracy. Review per-class precision, recall, F1, confusion matrix, false alerts, and held-out people and rooms before approving release.
 
 ## Factory to user release
 

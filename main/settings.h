@@ -31,6 +31,10 @@ typedef struct {
     int8_t out_gpio;         /* -1 = disabled */
     bool out_active_high;
     uint16_t out_hold_s;
+    /* HC-SR04 door sensor + transistor-driven active buzzer */
+    bool door_enabled;
+    bool buzzer_enabled;
+    uint16_t door_threshold_cm;
     /* UI */
     char lang[3];            /* "ar" / "en" */
     char ui_pass[33];        /* "" = open dashboard (user is "admin") */

@@ -16,6 +16,7 @@
 #include "sensing.h"
 #include "notify.h"
 #include "csi_stream.h"
+#include "door_sensor.h"
 
 static const char *TAG = "app";
 
@@ -56,6 +57,7 @@ void app_main(void)
     outputs_init(c);
 
     netmode_t mode = wifi_mgr_start();
+    ESP_ERROR_CHECK(door_sensor_start());
     web_server_start();
 
     if (mode == NETMODE_STA) {

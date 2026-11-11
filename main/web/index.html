@@ -59,7 +59,7 @@ progress{width:100%;height:10px;margin-top:10px}
   <div id="state">…</div>
   <div id="sub"><span class="chip" id="pres"></span><span class="chip warn" id="warm" style="display:none" data-i="warming"></span><span class="chip warn" id="off" style="display:none" data-i="offline"></span></div>
   <canvas id="cv" width="680" height="110"></canvas>
-  <div class="meta"><span id="m_ip"></span><span id="m_rssi"></span><span id="m_jit"></span><span id="m_up"></span></div>
+  <div class="meta"><span id="m_ip"></span><span id="m_rssi"></span><span id="m_jit"></span><span id="m_up"></span><span id="m_door"></span></div>
  </div>
 
  <div class="tabs" id="tabs">
@@ -128,6 +128,14 @@ progress{width:100%;height:10px;margin-top:10px}
   </div>
   <div class="chk"><input type="checkbox" id="oah" data-k="out_active_high" data-t="b"><label for="oah" data-i="out_hi"></label></div>
   <p class="hint" data-i="relay_h"></p>
+   <div class="sep"></div>
+   <h3 data-i="door_cfg"></h3>
+   <div class="chk"><input type="checkbox" id="door_enabled" data-k="door_enabled" data-t="b"><label for="door_enabled" data-i="door_enable"></label></div>
+   <div class="g">
+    <div><label data-i="door_range"></label><input type="number" min="20" max="300" data-k="door_threshold_cm" data-t="n"></div>
+    <div class="chk"><input type="checkbox" id="buzzer_enabled" data-k="buzzer_enabled" data-t="b"><label for="buzzer_enabled" data-i="buzzer_enable"></label></div>
+   </div>
+   <p class="hint" data-i="door_hw"></p>
   <button class="p" data-save="p_out" data-i="save"></button>
  </div>
 
@@ -201,13 +209,14 @@ progress{width:100%;height:10px;margin-top:10px}
 <script>
 const D={
 ar:{title:"رادار الواي فاي",t_det:"الكشف",t_out:"المخرجات",t_net:"الشبكة والوضع",t_int:"الربط",t_sys:"النظام",
- moving:"في حركة!",still:"مفيش حركة",pres_y:"في حد موجود",pres_n:"مفيش تواجد",warming:"بيسخّن… استنى شوية",offline:"مفيش اتصال بالجهاز",
+ moving:"في حركة!",still:"مفيش حركة",pres_y:"في حد موجود",pres_n:"مفيش تواجد",warming:"بيسخّن… استنى شوية",offline:"مفيش اتصال بالجهاز",door_present:"شخص عند الباب",door_clear:"لا يوجد شخص عند الباب",door_disabled:"حساس الباب متوقف",door_distance:"المسافة",buzzer_active:"الجرس يعمل",
  sens:"الحساسية",low:"منخفضة",med:"متوسطة",high:"عالية",motion_s:"حساسية الحركة",pres_s:"حساسية التواجد",hold:"إبقاء الحالة (ثواني)",source:"مصدر الإشارة",
  src0:"الراوتر",src1:"لوحة مساعدة (Pair)",src2:"أي واحد فيهم",adv:"إعدادات متقدمة",ping:"سرعة الإرسال (Hz)",save:"حفظ",saved:"اتحفظ ✓",
  cal:"المعايرة",cal_h:"اخرج من الأوضة (أو اقعد ثابت خالص) وقت المعايرة عشان الجهاز يتعلم الأوضة وهي هادية.",cal_d:"مدة المعايرة (ثواني)",cal_go:"ابدأ المعايرة",cal_clr:"امسح المعايرة",cal_base:"صفّر الخط المرجعي",
  cal_run:"المعايرة شغالة… متتحركش",cal_done:"المعايرة تمت ✓",
  led:"لمبة الحالة",led_t:"النوع",none:"مفيش",led_c:"لون الحركة",led_b:"السطوع %",led_h:"لوحة DevKitC-1 فيها لمبة RGB على GPIO 48 (أو 38 في بعض النسخ). الأزرق الوامض = بيتصل، البرتقالي = وضع الإعداد.",
- relay:"مخرج خارجي (ريلاي / بازر)",out_hold:"يفضل شغال بعد الحركة (ثواني)",out_hi:"يشتغل عند HIGH",relay_h:"وصّل ريلاي أو بازر على الـ GPIO ده. تجنب GPIO 0 و 19-20 و 26-32.",
+ relay:"مخرج خارجي (ريلاي / بازر)",out_hold:"يفضل شغال بعد الحركة (ثواني)",out_hi:"يشتغل عند HIGH",relay_h:"مخرج الريلاي العام. جرس HC-SR04 له دائرة قيادة منفصلة على GPIO 6.",
+  door_cfg:"حساس الباب والجرس",door_enable:"تفعيل HC-SR04 (GPIO 4 و5)",door_range:"مسافة اكتشاف الوجود (cm)",buzzer_enable:"تفعيل الجرس عند رصد شخص",door_hw:"الحساس يعمل على 5V: خرج Echo يمر عبر مقسم جهد قبل GPIO 5. الجرس 5V يحتاج ترانزستور قيادة على GPIO 6؛ لا توصله مباشرة باللوحة.",
  mode:"وضع الجهاز",role:"الدور",role0:"حساس (يكشف الحركة)",role1:"مُرسل (لوحة مساعدة)",role2:"بث CSI للكمبيوتر (تعرف نشاط)",sh:"عنوان الكمبيوتر (فاضي = تلقائي)",stream_msg:"بيبعت CSI للكمبيوتر",host:"اسم الجهاز",pair:"MAC اللوحة المساعدة",
  pair_h:"لو عندك لوحة S3 تانية: خليها «مُرسل» وحط الـ MAC بتاعها هنا، وبعدها اختار مصدر الإشارة. دقة أعلى ومش بتعتمد على الراوتر. (بيحتاج إعادة تشغيل)",my_mac:"الـ MAC بتاع اللوحة دي",
  pw_t:"حماية لوحة التحكم",pw:"كلمة سر جديدة (المستخدم: admin)",pw_clr:"شيل كلمة السر",
@@ -220,13 +229,14 @@ ar:{title:"رادار الواي فاي",t_det:"الكشف",t_out:"المخرج�
  up:"شغال من",sender_msg:"الجهاز في وضع «مُرسل» — بيبعت إشارة للوحة الحساسة بس.",err:"حصل خطأ",ota_ok:"تم التحديث، بيعيد التشغيل…",
  k_fw:"الإصدار",k_ip:"العنوان",k_mac:"MAC",k_heap:"ذاكرة فاضية",k_ssid:"الشبكة"},
 en:{title:"WiFi Radar",t_det:"Detection",t_out:"Outputs",t_net:"Network & mode",t_int:"Integrations",t_sys:"System",
- moving:"MOTION!",still:"NO MOTION",pres_y:"Someone present",pres_n:"No presence",warming:"Warming up…",offline:"Device unreachable",
+ moving:"MOTION!",still:"NO MOTION",pres_y:"Someone present",pres_n:"No presence",warming:"Warming up…",offline:"Device unreachable",door_present:"Person at the door",door_clear:"No person at the door",door_disabled:"Door sensor disabled",door_distance:"Distance",buzzer_active:"Buzzer active",
  sens:"Sensitivity",low:"Low",med:"Medium",high:"High",motion_s:"Motion sensitivity",pres_s:"Presence sensitivity",hold:"Hold state (s)",source:"Signal source",
  src0:"Router",src1:"Paired helper board",src2:"Either",adv:"Advanced",ping:"Send rate (Hz)",save:"Save",saved:"Saved ✓",
  cal:"Calibration",cal_h:"Leave the room (or stay perfectly still) so the device can learn the empty room.",cal_d:"Duration (s)",cal_go:"Start calibration",cal_clr:"Clear calibration",cal_base:"Reset baseline",
  cal_run:"Calibrating… stay out of the way",cal_done:"Calibration done ✓",
  led:"Status LED",led_t:"Type",none:"None",led_c:"Motion colour",led_b:"Brightness %",led_h:"DevKitC-1 has an RGB LED on GPIO 48 (38 on some revisions). Blinking blue = connecting, orange = setup mode.",
- relay:"External output (relay / buzzer)",out_hold:"Stay on after motion (s)",out_hi:"Active HIGH",relay_h:"Wire a relay or buzzer to this GPIO. Avoid GPIO 0, 19-20 and 26-32.",
+ relay:"External output (relay / buzzer)",out_hold:"Stay on after motion (s)",out_hi:"Active HIGH",relay_h:"General relay output. The HC-SR04 buzzer has a separate transistor driver on GPIO 6.",
+  door_cfg:"Door sensor and buzzer",door_enable:"Enable HC-SR04 (GPIO 4 and 5)",door_range:"Presence detection distance (cm)",buzzer_enable:"Enable buzzer when a person is detected",door_hw:"The sensor uses 5V: route Echo through a voltage divider before GPIO 5. A 5V buzzer requires a transistor driver on GPIO 6; never connect it directly to the ESP32 pin.",
  mode:"Device mode",role:"Role",role0:"Sensor (detects motion)",role1:"Sender (helper board)",role2:"CSI stream to PC (activity AI)",sh:"PC address (empty = auto)",stream_msg:"Streaming CSI to the PC",host:"Device name",pair:"Helper board MAC",
  pair_h:"With a second S3: set it to “Sender”, paste its MAC here, then pick the signal source. Better accuracy, independent of the router. (needs reboot)",my_mac:"This board's MAC",
  pw_t:"Dashboard password",pw:"New password (user: admin)",pw_clr:"Remove password",
@@ -268,7 +278,10 @@ function render(s){
  $('m_rssi').textContent=s.rssi!=null?s.rssi+' dBm':'';
  $('m_jit').textContent=stream?(t('stream_msg')+' · '+(s.csi_sent||0)):sender?t('sender_msg'):'jitter '+(s.jitter||0).toFixed(3);
  $('m_up').textContent=t('up')+' '+fmtUp(s.uptime||0);
- $('my_mac').textContent=s.mac||'';
+  $('m_door').textContent=!s.door_enabled?t('door_disabled'):(s.door_present?t('door_present'):t('door_clear'))+
+    (s.door_valid?' · '+t('door_distance')+' '+s.door_distance_cm+' cm':'')+
+    (s.buzzer_active?' · '+t('buzzer_active'):'');
+  $('my_mac').textContent=s.mac||'';
  $('kv').innerHTML=[['k_fw',s.fw],['k_ip',s.ip],['k_mac',s.mac],['k_ssid',s.ssid||'-'],['k_heap',Math.round((s.heap||0)/1024)+' KB']]
    .map(r=>'<span>'+t(r[0])+'</span><b>'+r[1]+'</b>').join('');
 }

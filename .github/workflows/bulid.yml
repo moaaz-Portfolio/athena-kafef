@@ -28,11 +28,13 @@ jobs:
           . $IDF_PATH/export.sh
           idf.py set-target esp32s3
           idf.py build
-          idf.py merge-bin -o merged.bin
+          idf.py merge-bin -o build/merged.bin
+          test -s build/merged.bin
+          test -s build/esp32s3-wifi-radar.bin
           mkdir -p docs/firmware
           cp build/merged.bin docs/firmware/radar-s3-merged.bin
           cp build/esp32s3-wifi-radar.bin docs/firmware/esp32s3-wifi-radar.bin
-          ls -l docs/firmware
+          ls -lh docs/firmware
 
       - name: Keep firmware files as artifact
         uses: actions/upload-artifact@v4

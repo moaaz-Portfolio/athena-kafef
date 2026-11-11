@@ -133,7 +133,7 @@ GROUPS = ("room", "person")
 
 
 def take_meta(path, label):
-    """Read metadata. Older recordings stored scenario names in the person field."""
+    """Read the person and room metadata used for held-out evaluation."""
     z = np.load(path, allow_pickle=False)
     clean = lambda k: (str(z[k]).strip().lower() if k in z.files else "")
     person = clean("person") or "unknown"

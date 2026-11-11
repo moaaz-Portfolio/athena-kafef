@@ -61,6 +61,7 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
     <div class="tile" id="presenceTile"><small data-i="presence_t"></small><strong id="presenceValue">غير معاير</strong><p id="presenceInfo"></p></div>
     <div class="tile" id="motionTile"><small data-i="motion_t"></small><strong id="motionValue">—</strong><p id="motionInfo"></p></div>
     <div class="tile" id="fallTile"><small data-i="fall_t"></small><strong id="fallValue">—</strong><p id="fallInfo"></p></div>
+     <div class="tile" id="doorTile"><small data-i="door_t"></small><strong id="doorValue">—</strong><p id="doorInfo"></p></div>
   </div>
   <button class="p" id="calgo" data-i="cal_go"></button>
   <button class="s" id="calstop" data-i="cal_stop"></button>
@@ -78,7 +79,6 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
     <label class="notify-item"><span data-i="notif_presence"></span><input type="checkbox" id="notif_presence"></label>
     <label class="notify-item"><span data-i="notif_empty_room"></span><input type="checkbox" id="notif_empty_room"></label>
     <label class="notify-item"><span data-i="notif_door"></span><input type="checkbox" id="notif_door_presence"></label>
-    <label class="notify-item"><span data-i="buzzer_title"></span><input type="checkbox" id="buzzer_enabled"></label>
     <label class="notify-item"><span data-i="notif_offline"></span><input type="checkbox" id="notif_device_offline"></label>
     <label class="notify-item"><span data-i="notif_csi"></span><input type="checkbox" id="notif_csi_quality"></label>
   </div>
@@ -111,23 +111,11 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
 </div>
 
 <div class="card" data-factory-only>
-  <h3 data-i="scenario_t"></h3>
-  <div id="scenarioBig" style="font-size:24px;font-weight:800;text-align:center;margin:10px 0">—</div>
-  <div class="hint" id="scenarioInfo"></div>
-  <button class="p" id="stgo" data-i="scenario_train_go"></button>
-  <button class="s" id="ststop" data-i="tr_stop"></button>
-  <div class="hint" id="stres"></div>
-  <pre id="stlog" style="display:none"></pre>
-</div>
-
-<div class="card" data-factory-only>
   <h3 data-i="rec_t"></h3>
   <div class="g">
     <div><label data-i="act"></label><select id="lab"></select></div>
-    <div><label data-i="own"></label><input id="labc" placeholder="mine_1" autocomplete="off"></div>
-    <div><label data-i="person"></label><input id="person" placeholder="M2" autocomplete="off"></div>
-    <div><label data-i="scenario"></label><input id="scenario" placeholder="another_person_walking" autocomplete="off"></div>
-    <div><label data-i="room"></label><input id="room" placeholder="living_room"></div>
+    <div><label data-i="person"></label><input id="person" placeholder="P1" autocomplete="off"></div>
+    <div><label data-i="room"></label><input id="room" placeholder="living_room" autocomplete="off"></div>
     <div><label data-i="secs"></label><input id="secs" type="number" value="20" min="5" max="300"></div>
   </div>
   <div class="hint" id="labhint"></div>
@@ -143,7 +131,6 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
   <h3 data-i="tr_t"></h3>
   <div class="g">
     <div><label data-i="epochs"></label><input id="ep" type="number" value="30" min="1" max="200"></div>
-    <div><label><input type="checkbox" id="pre" style="width:auto"> <span data-i="pre"></span></label></div>
   </div>
   <button class="p" id="tgo" data-i="tr_go"></button>
   <button class="s" id="tstop" data-i="tr_stop"></button>
@@ -155,27 +142,27 @@ button.warnbtn{background:var(--warn);color:#19130a}.subtle{font-size:12px;color
 
 <script>
 const D={
-ar:{sub:"استشعار CSI · التواجد والحركة والسقوط",api_token_title:"رمز ربط تطبيق الموبايل",enable_browser_notifications:"تفعيل إشعارات المتصفح",api_token_hint:"انسخ الرمز إلى تطبيق Android. لا تشاركه خارج شبكتك المحلية، وسيظل محفوظًا على جهاز المعالجة.",copy_api_token:"نسخ الرمز",notify_title:"إعدادات التنبيهات",buzzer_title:"السماح بجرس الباب (بعد توصيل الوحدة)",notify_hint:"التغييرات تُحفظ على الجهاز وتُستخدم من الويب وتطبيق الموبايل. إيقاف التنبيه لا يوقف الاكتشاف أو تسجيل الحدث.",notif_fall:"اشتباه سقوط",notif_movement:"اكتشاف الحركة",notif_presence:"وجود شخص",notif_empty_room:"الغرفة أصبحت فارغة",notif_door:"شخص عند الباب (بعد الربط)",notif_offline:"انقطاع اتصال الجهاز",notif_csi:"انخفاض جودة إشارة CSI",notify_saved:"تم حفظ إعدادات التنبيه",notify_error:"تعذر حفظ الإعدادات",events_title:"سجل الأحداث الأخير",edition_factory:"نسخة المصنع",edition_user:"نسخة المستخدم",cal_user:"ابدأ معايرة الغرفة (10 دقائق)",cal_factory:"معايرة تجريبية (10 ثوانٍ)",monitor_t:"المراقبة المتكاملة · CSI",presence_t:"التواجد في الغرفة",motion_t:"الحركة",fall_t:"اكتشاف السقوط",cal_go:"عاير الغرفة وهي فاضية (10 ثواني)",cal_stop:"إلغاء المعايرة",fall_ack:"تأكيد مراجعة التنبيه وإخفاؤه",activity_t:"تصنيف النشاط المدرّب",safety_note:"تنبيه بحثي: النتائج تقديرية وليست نظام إنقاذ أو جهازًا طبيًا. راجع أي تنبيه بشريًا ولا تعتمد عليه وحده.",no_stream:"مفيش بث",fall_model_ready:"فئة fall موجودة في الموديل المدرّب",fall_model_need:"فئة fall مش متدرّبة؛ التنبيه حاليًا قاعدي وتجريبي",pres_unknown:"غير محدد",pres_yes:"فيه وجود محتمل",pres_no:"الغرفة فاضية غالبًا",pres_uncal:"غير معاير",pres_score:"مؤشر التغير",pres_cal_hint:"افرغ الغرفة ثم ابدأ المعايرة",moving:"فيه حركة",still:"ثابت حاليًا",motion_level:"شدة الحركة",motion_score:"مؤشر الحركة",fall_alert:"اشتباه سقوط — تحقّق الآن",fall_check:"فحص نمط حركة",fall_ready:"لا توجد إشارة حاليًا",impact:"شدة التغير",fall_model_p:"احتمال الموديل",cal_running:"جاري معايرة الغرفة:",heat_h:"خريطة CSI: الصفوف = الزمن، الأعمدة = الـ 64 subcarrier. التغيّر في الألوان = حركة.",
- scenario_t:"تمييز سيناريو المرور (منفصل عن نوع الحركة)",scenario_train_go:"درّب مصنف سيناريوهات المرور",rec_t:"1) سجّل بياناتك",act:"النشاط",own:"أو اكتب نشاط جديد",person:"معرّف الشخص",scenario:"اسم التجربة (اختياري)",room:"المكان",secs:"مدة التسجيل (ثواني)",rec_go:"ابدأ التسجيل",rec_stop:"إلغاء",
- rec_tip:"نصيحة: سجّل 10 مرات على الأقل لكل نشاط، وغيّر مكان وقوفك واتجاهك ووقت اليوم. لازم يكون فيه نشاط «empty» (الأوضة فاضية) عشان الموديل يعرف السكون.",
- tr_t:"2) درّب الموديل",epochs:"عدد الحقب",pre:"ابدأ من الموديل المدرّب القديم (تجريبي)",tr_go:"ابدأ التدريب",tr_stop:"إيقاف",
+ar:{sub:"استشعار CSI · أربع فئات: غرفة فارغة، شخص ثابت، جلوس، حركة",door_t:"حساس الباب HC-SR04",door_offline:"الحساس غير متصل",door_present:"شخص عند الباب",door_clear:"لا يوجد شخص عند الباب",door_distance:"المسافة",api_token_title:"رمز ربط تطبيق الموبايل",enable_browser_notifications:"تفعيل إشعارات المتصفح",api_token_hint:"انسخ الرمز إلى تطبيق Android. لا تشاركه خارج شبكتك المحلية، وسيظل محفوظًا على جهاز المعالجة.",copy_api_token:"نسخ الرمز",notify_title:"إعدادات التنبيهات",notify_hint:"التغييرات تُحفظ على الجهاز وتُستخدم من الويب وتطبيق الموبايل. إيقاف التنبيه لا يوقف الاكتشاف أو تسجيل الحدث.",notif_fall:"اشتباه سقوط",notif_movement:"اكتشاف الحركة",notif_presence:"وجود شخص",notif_empty_room:"الغرفة أصبحت فارغة",notif_door:"شخص عند الباب",notif_offline:"انقطاع اتصال الجهاز",notif_csi:"انخفاض جودة إشارة CSI",notify_saved:"تم حفظ إعدادات التنبيه",notify_error:"تعذر حفظ الإعدادات",events_title:"سجل الأحداث الأخير",edition_factory:"نسخة المصنع",edition_user:"نسخة المستخدم",cal_user:"ابدأ معايرة الغرفة (10 دقائق)",cal_factory:"معايرة تجريبية (10 ثوانٍ)",monitor_t:"المراقبة المتكاملة · CSI",presence_t:"التواجد في الغرفة",motion_t:"الحركة",fall_t:"اكتشاف السقوط",cal_go:"عاير الغرفة وهي فاضية (10 ثواني)",cal_stop:"إلغاء المعايرة",fall_ack:"تأكيد مراجعة التنبيه وإخفاؤه",activity_t:"تصنيف النشاط المدرّب",safety_note:"تنبيه بحثي: النتائج تقديرية وليست نظام إنقاذ أو جهازًا طبيًا. راجع أي تنبيه بشريًا ولا تعتمد عليه وحده.",no_stream:"مفيش بث",fall_model_ready:"كشف السقوط التجريبي منفصل عن الفئات الأربع",fall_model_need:"كشف السقوط تجريبي وقائم على قواعد وليس فئة تدريب",pres_unknown:"غير محدد",pres_yes:"فيه وجود محتمل",pres_no:"الغرفة فاضية غالبًا",pres_uncal:"غير معاير",pres_score:"مؤشر التغير",pres_cal_hint:"افرغ الغرفة ثم ابدأ المعايرة",moving:"فيه حركة",still:"ثابت حاليًا",motion_level:"شدة الحركة",motion_score:"مؤشر الحركة",fall_alert:"اشتباه سقوط — تحقّق الآن",fall_check:"فحص نمط حركة",fall_ready:"لا توجد إشارة حاليًا",impact:"شدة التغير",fall_model_p:"احتمال الموديل",cal_running:"جاري معايرة الغرفة:",heat_h:"خريطة CSI: الصفوف = الزمن، الأعمدة = الـ 64 subcarrier. التغيّر في الألوان = حركة.",
+ rec_t:"1) سجّل بياناتك",act:"النشاط",person:"معرّف الشخص",room:"المكان",secs:"مدة التسجيل (ثواني)",rec_go:"ابدأ التسجيل",rec_stop:"إلغاء",
+ rec_tip:"سجّل 10 مرات أو أكثر لكل فئة، على أشخاص وغرف مختلفة. الشخص الثابت واقف، والجلوس لشخص قاعد، والغرفة الفاضية لا يوجد فيها أحد.",
+ tr_t:"2) درّب الموديل",epochs:"عدد الحقب",tr_go:"ابدأ التدريب",tr_stop:"إيقاف",
  takes:"المرات",secs_c:"ثواني",del:"مسح",
  conn:"متصل",disc:"مفيش بث من اللوحة",fps:"إطار/ث",loss:"فقد",nomodel:"لسه مفيش موديل — سجّل بيانات وبعدين درّب.",uncertain:"مش متأكد",
  st_countdown:"استعد… ",st_rec:"سجّل الحركة الآن: ",st_done:"✓ ",st_err:"✗ ",tdone:"خلص التدريب. دقة الاختبار",twarn:"الدقة دي على نفس المكان والشخص — جرّبه في أوضة تانية قبل ما تثق فيه.",
  trun:"التدريب شغال…",
- h:{empty:"الأوضة فاضية تماماً",sitting_still:"قاعد ثابت",sitting_down:"الجلوس",lying_down:"استلقاء آمن على سطح لين",fall:"سقوط تجريبي آمن تحت إشراف",walking:"مشي طبيعي",running:"جري في المكان أو حواليه",jumping:"نط",squatting:"قرفصاء",arm_wave:"تلويح بالإيد",turning:"لف حوالين نفسك"}},
-en:{sub:"CSI sensing · presence, motion and fall events",api_token_title:"Android connection token",enable_browser_notifications:"Enable browser notifications",api_token_hint:"Copy this token into the Android app. Keep it private and only use it on your trusted local network.",copy_api_token:"Copy token",notify_title:"Notification preferences",buzzer_title:"Allow door buzzer (after the door unit is connected)",notify_hint:"Changes are saved on the local device and shared by web and Android. Turning off a notification does not stop detection or event logging.",notif_fall:"Possible fall",notif_movement:"Movement detected",notif_presence:"Person present",notif_empty_room:"Room became empty",notif_door:"Person at the door (when connected)",notif_offline:"Device disconnected",notif_csi:"Low CSI signal quality",notify_saved:"Notification settings saved",notify_error:"Could not save settings",events_title:"Recent events",edition_factory:"Factory Edition",edition_user:"User Edition",cal_user:"Calibrate room (10 minutes)",cal_factory:"Test calibration (10 seconds)",monitor_t:"Integrated CSI monitor",presence_t:"Room presence",motion_t:"Motion",fall_t:"Fall detection",cal_go:"Calibrate empty room (10 seconds)",cal_stop:"Cancel calibration",fall_ack:"Acknowledge and hide alert",activity_t:"Trained activity classifier",safety_note:"Research prototype only. Results are estimates, not a medical or emergency safety system. Verify every alert in person.",no_stream:"No stream",fall_model_ready:"The trained model includes a fall class",fall_model_need:"No trained fall class; heuristic alerts are experimental",pres_unknown:"Unknown",pres_yes:"Possible presence",pres_no:"Likely empty",pres_uncal:"Not calibrated",pres_score:"Change score",pres_cal_hint:"Empty the room, then start calibration",moving:"Motion detected",still:"Currently still",motion_level:"Motion level",motion_score:"Motion score",fall_alert:"Possible fall — check now",fall_check:"Checking movement pattern",fall_ready:"No current indication",impact:"Change peak",fall_model_p:"Model probability",cal_running:"Calibrating room:",heat_h:"CSI heat-map: rows = time, columns = the 64 subcarriers. Colour changes = movement.",
- scenario_t:"Passage scenario classifier (separate from activity)",scenario_train_go:"Train passage-scenario classifier",rec_t:"1) Record your data",act:"Activity",own:"or type a new one",person:"Person ID",scenario:"Experiment scenario (optional)",room:"Place",secs:"Duration (s)",rec_go:"Start recording",rec_stop:"Cancel",
- rec_tip:"Tip: record at least 10 takes per activity, changing where you stand, your direction and the time of day. Include an “empty” activity (nobody in the room) so the model knows stillness.",
- tr_t:"2) Train the model",epochs:"Epochs",pre:"Start from the old pretrained model (experimental)",tr_go:"Start training",tr_stop:"Stop",
+ h:{empty_room:"الغرفة فاضية تمامًا",person_static:"شخص واقف ثابت من غير حركة",sitting:"شخص قاعد ثابت",movement:"شخص بيتحرك"}},
+en:{sub:"CSI sensing · four classes: empty room, standing still, sitting, movement",door_t:"HC-SR04 door sensor",door_offline:"Sensor offline",door_present:"Person at the door",door_clear:"No person at the door",door_distance:"Distance",api_token_title:"Android connection token",enable_browser_notifications:"Enable browser notifications",api_token_hint:"Copy this token into the Android app. Keep it private and only use it on your trusted local network.",copy_api_token:"Copy token",notify_title:"Notification preferences",buzzer_title:"Allow door buzzer (after the door unit is connected)",notify_hint:"Changes are saved on the local device and shared by web and Android. Turning off a notification does not stop detection or event logging.",notif_fall:"Possible fall",notif_movement:"Movement detected",notif_presence:"Person present",notif_empty_room:"Room became empty",notif_door:"Person at the door",notif_offline:"Device disconnected",notif_csi:"Low CSI signal quality",notify_saved:"Notification settings saved",notify_error:"Could not save settings",events_title:"Recent events",edition_factory:"Factory Edition",edition_user:"User Edition",cal_user:"Calibrate room (10 minutes)",cal_factory:"Test calibration (10 seconds)",monitor_t:"Integrated CSI monitor",presence_t:"Room presence",motion_t:"Motion",fall_t:"Fall detection",cal_go:"Calibrate empty room (10 seconds)",cal_stop:"Cancel calibration",fall_ack:"Acknowledge and hide alert",activity_t:"Trained activity classifier",safety_note:"Research prototype only. Results are estimates, not a medical or emergency safety system. Verify every alert in person.",no_stream:"No stream",fall_model_ready:"Experimental fall logic is separate from the four classes",fall_model_need:"Fall alerts use experimental rules, not a trained class",pres_unknown:"Unknown",pres_yes:"Possible presence",pres_no:"Likely empty",pres_uncal:"Not calibrated",pres_score:"Change score",pres_cal_hint:"Empty the room, then start calibration",moving:"Motion detected",still:"Currently still",motion_level:"Motion level",motion_score:"Motion score",fall_alert:"Possible fall — check now",fall_check:"Checking movement pattern",fall_ready:"No current indication",impact:"Change peak",fall_model_p:"Model probability",cal_running:"Calibrating room:",heat_h:"CSI heat-map: rows = time, columns = the 64 subcarriers. Colour changes = movement.",
+ rec_t:"1) Record your data",act:"Activity",person:"Person ID",room:"Place",secs:"Duration (s)",rec_go:"Start recording",rec_stop:"Cancel",
+ rec_tip:"Record 10 or more takes per class across different people and rooms. Person static is a standing person, sitting is seated, and empty room has nobody present.",
+ tr_t:"2) Train the model",epochs:"Epochs",tr_go:"Start training",tr_stop:"Stop",
  takes:"Takes",secs_c:"Seconds",del:"Delete",
  conn:"connected",disc:"no stream from the board",fps:"fps",loss:"loss",nomodel:"No model yet — record data, then train.",uncertain:"uncertain",
  st_countdown:"Get ready… ",st_rec:"Do the activity now: ",st_done:"✓ ",st_err:"✗ ",tdone:"Training finished. Test accuracy",twarn:"This score is for the same place and person — test in another room before trusting it.",
  trun:"Training…",
- h:{empty:"Nobody in the room",sitting_still:"Sitting still",sitting_down:"Sitting down",lying_down:"Controlled lying on a soft surface",fall:"Safe simulated fall under adult supervision",walking:"Normal walking",running:"Running in/around the spot",jumping:"Jumping",squatting:"Squats",arm_wave:"Waving an arm",turning:"Turning on the spot"}}};
+ h:{empty_room:"Empty room",person_static:"Person standing still",sitting:"Person sitting still",movement:"Person moving"}}};
 let lang=localStorage.getItem('lang')||'ar';
 const $=id=>document.getElementById(id), t=k=>D[lang][k]||k;
-const DEF=['empty','sitting_still','sitting_down','lying_down','walking','running','jumping','squatting','arm_wave','turning','fall'];
+const DEF=['empty_room','person_static','sitting','movement'];
 let apiToken='';
 const api=(p,b)=>fetch(p,b===undefined?{}:{method:'POST',headers:{'Authorization':'Bearer '+apiToken,'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json());
 function ap(){document.documentElement.lang=lang;document.documentElement.dir=lang=='ar'?'rtl':'ltr';
@@ -206,7 +193,7 @@ function draw(s){
  const editionLabel=s.edition==="user"?t("edition_user"):t("edition_factory");
  const editionNode=document.querySelector("[data-i=edition_label]");if(editionNode)editionNode.textContent=editionLabel;
  syncNotifications(s.notifications||{});
- syncOutputs(s.outputs||{});
+
  renderEvents(s.events||[]);
  const pLabels={unknown:t('pres_unknown'),present:t('pres_yes'),empty:t('pres_no')};
  $('presenceValue').textContent=!s.connected?t('no_stream'):(m.calibrated?(pLabels[m.status]||pLabels.unknown):t('pres_uncal'));
@@ -232,17 +219,11 @@ function draw(s){
   bars.innerHTML=Object.entries(s.pred.probs).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<div class="bar"><span>${k}</span><div><i style="width:${(v*100).toFixed(0)}%"></i></div><span>${(v*100).toFixed(0)}%</span></div>`).join('');
  }else{big.textContent='…';big.className='u';bars.innerHTML=''}
  $('modelmsg').textContent=s.model.loaded?'':(s.model.error||t('nomodel'));
- const sc=s.scenario_pred,scTrain=s.scenario_train||{};
- $('scenarioBig').textContent=sc&&s.connected?(sc.label==='uncertain'?'❓ '+t('uncertain')+' ('+sc.best+')':sc.label):(s.scenario_model?.loaded?'—':'لم يتم تدريب مصنف السيناريوهات بعد');
- const scCounts=s.scenario_counts||{};
- const scCountText=Object.entries(scCounts).map(([k,v])=>k+': '+v).join(' · ')||'لا توجد تسجيلات Scenario محفوظة';
- $('scenarioInfo').textContent=(s.scenario_model?.loaded?'مصنف السيناريوهات يعمل':'عدد التسجيلات: '+scCountText+' — يلزم تسجيلان على الأقل لكل سيناريو')+(Object.values(scCounts).some(v=>v===2)?' · وضع تجريبي: التسجيل الثاني يُستخدم للتحقق والاختبار؛ الدقة أولية وليست تقييمًا بحثيًا موثوقًا.':'')+(s.scenario_model?.error?' · '+s.scenario_model.error:'');
- const scRun=scTrain.status==='running';
- $('stgo').disabled=scRun||!Object.keys(scCounts).length;
- $('ststop').disabled=!scRun;
- $('stres').textContent=scRun?'تدريب مصنف السيناريوهات جارٍ…':(scTrain.status==='done'&&scTrain.metrics?'انتهى التدريب · دقة الاختبار: '+(scTrain.metrics.accuracy*100).toFixed(1)+'%':scTrain.status==='error'?'تعذر التدريب؛ راجع التفاصيل أدناه.':'');
- $('stlog').style.display=scTrain.log?.length?'':'none';$('stlog').textContent=(scTrain.log||[]).join('\\n');$('stlog').scrollTop=1e6;
- drawHeat(s.heat);drawEn(s.energy);
+  const door=s.door||{};
+  $('doorValue').textContent=!door.connected?t('door_offline'):(door.present?t('door_present'):t('door_clear'));
+  $('doorInfo').textContent=door.connected&&door.distance_cm?(t('door_distance')+': '+door.distance_cm+' cm'):(door.error||'');
+  $('doorTile').className='tile '+(door.connected&&door.present?'good':'');
+  drawHeat(s.heat);drawEn(s.energy);
  // recorder
  const r=s.rec,busy=r.status=='countdown'||r.status=='recording';
  $('rgo').disabled=busy;$('rstop').disabled=!busy;
@@ -258,11 +239,9 @@ function draw(s){
  $('tpr').style.display=run?'':'none';$('tpr').value=tr.epochs?tr.epoch/tr.epochs*100:0;
  $('tlog').style.display=tr.log.length?'':'none';$('tlog').textContent=tr.log.join('\n');$('tlog').scrollTop=1e6;
  $('tres').textContent=run?t('trun'):(tr.status=='done'&&tr.metrics?t('tdone')+': '+(tr.metrics.accuracy*100).toFixed(1)+'%  —  '+t('twarn'):'');
- $('pre').parentElement.style.display=s.model.pretrained_available?'':'none';
+
 }
 function syncNotifications(values){Object.entries(values).forEach(([key,value])=>{const input=$("notif_"+key);if(input && document.activeElement!==input)input.checked=!!value})}
-function syncOutputs(values){const input=$("buzzer_enabled");if(input && document.activeElement!==input)input.checked=!!values.buzzer_enabled}
-$("buzzer_enabled").addEventListener("change",async()=>{try{const r=await api("/api/config",{outputs:{buzzer_enabled:$("buzzer_enabled").checked}});if(!r.ok)throw new Error(r.error||"save failed");$("notifyStatus").textContent=t("notify_saved")}catch(e){$("notifyStatus").textContent=t("notify_error")}});
 let eventsInitialized=false;
 const seenEventIds=new Set();
 const eventPreference={fall:"fall",movement:"movement",presence:"presence",empty_room:"empty_room",device_offline:"device_offline",csi_quality:"csi_quality",door_presence:"door_presence"};
@@ -292,13 +271,11 @@ $("enableBrowserNotifications").onclick=async()=>{
 async function saveNotification(key,value){try{const r=await api("/api/config",{notifications:{[key]:value}});if(!r.ok)throw new Error(r.error||"save failed");$("notifyStatus").textContent=t("notify_saved")}catch(e){$("notifyStatus").textContent=t("notify_error")}}
 ["fall","movement","presence","empty_room","door_presence","device_offline","csi_quality"].forEach(key=>{const input=$("notif_"+key);input.addEventListener("change",()=>saveNotification(key,input.checked))});
 async function delLab(k){if(confirm(k+' ?'))await api('/api/label/delete',{label:k})}
-$('rgo').onclick=async()=>{const label=($('labc').value.trim()||$('lab').value);
- const r=await api('/api/record',{label,person:$('person').value,scenario:$('scenario').value,room:$('room').value,seconds:+$('secs').value});if(!r.ok)alert(r.error)};
+$('rgo').onclick=async()=>{const label=$('lab').value;
+ const r=await api('/api/record',{label,person:$('person').value,room:$('room').value,seconds:+$('secs').value});if(!r.ok)alert(r.error)};
 $('rstop').onclick=()=>api('/api/record/stop',{});
-$('tgo').onclick=async()=>{const r=await api('/api/train',{epochs:+$('ep').value,pretrained:$('pre').checked});if(!r.ok)alert(r.error)};
+$('tgo').onclick=async()=>{const r=await api('/api/train',{epochs:+$('ep').value});if(!r.ok)alert(r.error)};
 $('tstop').onclick=()=>api('/api/train/stop',{});
-$('stgo').onclick=async()=>{const r=await api('/api/train/scenario',{epochs:+$('ep').value});if(!r.ok)alert(r.error)};
-$('ststop').onclick=()=>api('/api/train/scenario/stop',{});
 $('calgo').onclick=async()=>{const r=await api('/api/calibrate',{seconds:10});if(!r.ok)alert(r.error)};
 $('calstop').onclick=()=>api('/api/calibrate/stop',{});
 $('fallack').onclick=()=>api('/api/fall/ack',{});

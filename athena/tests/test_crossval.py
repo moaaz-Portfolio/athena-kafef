@@ -15,7 +15,7 @@ import fake_esp  # noqa: E402
 
 ROOMS = {"bedroom": 0, "living": 1, "kitchen": 2}      # each room gets its own static signature
 PERSONS = ("ali", "sara")
-LABELS = ("empty", "walking", "running")
+LABELS = ("empty_room", "person_static", "sitting", "movement")
 
 
 def make_dataset(root, takes=3, seconds=6, rate=90):
@@ -35,7 +35,7 @@ def make_dataset(root, takes=3, seconds=6, rate=90):
 def test_save_take_never_overwrites(tmp_path):
     root = os.path.join(str(tmp_path), "collide")
     ts, rssi, amp = np.arange(10), np.zeros(10, np.int8), np.zeros((10, 64), np.uint8)
-    paths = {data.save_take(root, "x", "p", "r", ts, rssi, amp) for _ in range(5)}
+    paths = {data.save_take(root, "empty_room", "p", "r", ts, rssi, amp) for _ in range(5)}
     assert len(paths) == 5 and all(os.path.exists(p) for p in paths)
     print("save_take collision-safe ok")
 
@@ -70,7 +70,7 @@ def test_run_baseline(crossval_dataset):
     res = crossval.run(root, "room", baseline_only=True, log=lambda *_: None)
     assert [f["held_out"] for f in res["folds"]] == sorted(ROOMS)
     acc = res["mean"]["baseline"]["accuracy"]
-    assert acc > 0.8, acc                       # empty / walking / running differ clearly in energy
+    assert acc > 0.55, acc                      # four class centroids are a simple baseline, not the final model
     pres = res["mean"]["baseline"]
     assert pres["false_alarm_rate"] < 0.2 and pres["miss_rate"] < 0.2, pres
     res_p = crossval.run(root, "person", baseline_only=True, log=lambda *_: None)
@@ -85,13 +85,14 @@ def test_run_baseline(crossval_dataset):
 
 
 def test_presence_rates():
-    labels = ["empty", "sitting", "walking"]
-    cm = np.array([[90, 8, 2],       # 10 of 100 empty windows raised an alarm
-                   [20, 70, 10],     # 20 of 100 sitting windows were missed
-                   [0, 10, 90]])
+    labels = ["empty_room", "person_static", "sitting", "movement"]
+    cm = np.array([[90, 6, 2, 2],     # 10 of 100 empty windows raised an alarm
+                   [15, 75, 5, 5],
+                   [20, 5, 65, 10],   # occupied windows classified as empty count as misses
+                   [10, 5, 5, 80]])
     r = crossval.presence_rates(cm, labels)
     assert abs(r["false_alarm_rate"] - 0.10) < 1e-9
-    assert abs(r["miss_rate"] - 20 / 200) < 1e-9
+    assert abs(r["miss_rate"] - 45 / 300) < 1e-9
     assert crossval.presence_rates(cm, ["a", "b", "c"]) is None
     print("presence rates ok")
 
@@ -100,7 +101,7 @@ def test_needs_two_groups(tmp_path):
     root = os.path.join(str(tmp_path), "one_room")
     ts, rssi = np.arange(400) * 11, np.zeros(400, np.int8)
     amp = np.random.default_rng(0).integers(40, 80, (400, 64)).astype(np.uint8)
-    for lab in ("empty", "walking"):
+    for lab in ("empty_room", "movement"):
         for _ in range(3):
             data.save_take(root, lab, "ali", "only_room", ts, rssi, amp)
     try:

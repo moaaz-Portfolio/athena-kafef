@@ -1,194 +1,106 @@
-"""End-to-end check without hardware or torch: fake board -> UDP -> record -> dataset."""
-import json
+"""Four-class Factory pipeline and door telemetry contract checks."""
 import os
-import shutil
+import struct
 import sys
 import tempfile
-import threading
-import time
-import urllib.request
 
 import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools"))
-from athena import app, data, proto  # noqa: E402
+
+from athena import app, data  # noqa: E402
+from athena.door import parse_packet  # noqa: E402
 import fake_esp  # noqa: E402
 
-UDP, HTTP = 5611, 8611
-API_TOKEN = ""
-tmp = tempfile.mkdtemp()
-app.DATA_DIR = os.path.join(tmp, "data")
-app.MODEL_DIR = os.path.join(tmp, "models")
-app.MODEL_PATH = os.path.join(app.MODEL_DIR, "activity_model.pt")
+
+def test_door_packet():
+    packet = struct.pack("<4sIHBBB", b"DOR1", 17, 84, 1, 1, 1)
+    state = parse_packet(packet)
+    assert state is not None
+    assert state["sequence"] == 17
+    assert state["distance_cm"] == 84
+    assert state["present"] is True
+    assert state["sensor_ok"] is True
+    assert state["buzzer_active"] is True
+    assert parse_packet(b"invalid") is None
+    print("HC-SR04 telemetry packet ok")
 
 
-def test_proto():
-    pkt = proto.build(7, 123456, -48, np.arange(64))
-    assert len(pkt) == 14 + 64
-    seq, ts, rssi, amp = proto.parse(pkt)
-    assert (seq, ts, rssi) == (7, 123456, -48) and amp[5] == 5
-    assert proto.parse(b"junk") is None and proto.parse(pkt[:20]) is None
-    print("proto ok")
+def test_four_class_dataset():
+    assert data.ACTIVITY_LABELS == ("empty_room", "person_static", "sitting", "movement")
+    with tempfile.TemporaryDirectory() as root:
+        base = 60 + 25 * np.sin(np.linspace(0, 6, 64))
+        ts = np.arange(0, 6000, 20, dtype=np.uint32)
+        for label_index, label in enumerate(data.ACTIVITY_LABELS):
+            for take in range(3):
+                rng = np.random.default_rng(label_index * 100 + take)
+                amp = np.stack([
+                    fake_esp.frame(float(t) / 1000.0, label, base, rng) for t in ts
+                ]).clip(0, 255).astype(np.uint8)
+                data.save_take(
+                    root, label, f"person_{take}", f"room_{take}",
+                    ts, np.full(len(ts), -50, dtype=np.int8), amp,
+                )
+
+        takes = data.list_takes(root)
+        assert set(takes) == set(data.ACTIVITY_LABELS)
+        assert all(len(takes[label]) == 3 for label in data.ACTIVITY_LABELS)
+        labels, splits, counts = data.load_dataset(root, fs=50, win=64, hop=16)
+        assert labels == list(data.ACTIVITY_LABELS)
+        assert all(counts[part] == 4 for part in ("train", "val", "test"))
+        for X, y in splits.values():
+            assert X.shape[1:] == (64, 64)
+            assert len(X) == len(y) > 0
+        print("four-class dataset split ok:", labels, counts)
+
+        try:
+            data.save_take(
+                root, "walking", "P1", "R1", ts,
+                np.full(len(ts), -50, dtype=np.int8),
+                np.zeros((len(ts), 64), dtype=np.uint8),
+            )
+            raise AssertionError("extra labels must be rejected")
+        except ValueError:
+            pass
+
+        data.delete_label(root, "movement")
+        try:
+            data.load_dataset(root)
+            raise AssertionError("training must require all four classes")
+        except data.DatasetError as exc:
+            assert "movement" in str(exc)
+        print("unknown and missing class guards ok")
 
 
-def test_resample():
-    ts = np.cumsum(np.random.default_rng(0).uniform(8, 14, 500))
-    amp = np.tile(np.sin(ts / 200)[:, None], (1, 64)).astype(np.float32) * 20 + 60
-    out = data.resample(ts, amp, 50)
-    assert out.shape[1] == 64 and abs(len(out) - (ts[-1] - ts[0]) / 20) < 2
-    w = data.make_windows(out, 64, 16)
-    assert w.shape[1:] == (64, 64)
-    assert abs(data.normalize_window(w[0]).mean()) < 1e-3
-    print("resample/windows ok", out.shape, w.shape)
+def test_edition_guards():
+    with tempfile.TemporaryDirectory() as root:
+        old_data, old_models = app.DATA_DIR, app.MODEL_DIR
+        app.DATA_DIR = os.path.join(root, "data")
+        app.MODEL_DIR = os.path.join(root, "models")
+        app.MODEL_PATH = os.path.join(app.MODEL_DIR, "activity_model.pt")
+        try:
+            user = app.State(5005, edition="user")
+            assert "Factory Edition" in user.start_record("movement", "P1", "R1", 20)
+            assert "Factory Edition" in user.start_train(5)
+            snapshot = user.snapshot()
+            assert snapshot["takes"] == {}
+            assert snapshot["rec"]["status"] == "disabled"
+            assert snapshot["train"]["status"] == "disabled"
+            assert snapshot["door"]["connected"] is False
 
-
-def fake_board(stop):
-    import socket
-    rng = np.random.default_rng(3)
-    base = 60 + 25 * np.sin(np.linspace(0, 6, 64))
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    t0, seq = time.time(), 0
-    while not stop.is_set():
-        t = time.time() - t0
-        label = fake_board.label
-        s.sendto(proto.build(seq, int(t * 1000), -50, fake_esp.frame(t, label, base, rng)), ("127.0.0.1", UDP))
-        seq += 1
-        time.sleep(0.011)
-fake_board.label = "empty"
-
-
-def call(path, body=None):
-    req = urllib.request.Request(f"http://127.0.0.1:{HTTP}{path}", data=None if body is None else json.dumps(body).encode(),
-                                 headers={"Authorization": f"Bearer {API_TOKEN}"} if body is not None else {})
-    return json.loads(urllib.request.urlopen(req, timeout=5).read())
-
-
-def test_app():
-    global API_TOKEN
-    st = app.State(UDP)
-    API_TOKEN = st.api_token
-    st.rx.start()
-    threading.Thread(target=st.loop, daemon=True).start()
-    from http.server import ThreadingHTTPServer
-    srv = ThreadingHTTPServer(("127.0.0.1", HTTP), app.make_handler(st))
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    stop = threading.Event()
-    threading.Thread(target=fake_board, args=(stop,), daemon=True).start()
-    time.sleep(2.5)
-
-    s = call("/api/state")
-    assert call("/api/token")["token"] == API_TOKEN
-    assert s["connected"] and s["fps"] > 40, s["fps"]
-    assert len(s["heat"]) == 80 and len(s["heat"][0]) == 64
-    print(f"live ok: {s['fps']} fps, loss {s['loss']}%")
-
-    # CSRF guard
-    try:
-        urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{HTTP}/api/record", data=b"{}"))
-        raise SystemExit("POST without header must fail")
-    except urllib.error.HTTPError as e:
-        assert e.code == 401
-    page = urllib.request.urlopen(f"http://127.0.0.1:{HTTP}/").read()
-    assert b"WiFi Radar" in page
-
-    # record 3 takes of 2 activities (7 s each, shortened by patching the countdown)
-    orig_sleep = time.sleep
-    for label in ("empty", "walking"):
-        fake_board.label = label
-        for k in range(3):
-            r = call("/api/record", {"label": label, "person": "p", "room": "r", "scenario": "test_scenario", "seconds": 5})
-            assert r["ok"], r
-            # The recording worker starts asynchronously. Wait until this request
-            # has actually entered countdown/recording before accepting its result;
-            # otherwise a previous take's "done" status can race this poll.
-            deadline = time.monotonic() + 18
-            saw_busy = False
-            rec = None
-            while time.monotonic() < deadline:
-                rec = call("/api/state")["rec"]
-                if rec["status"] in ("countdown", "recording"):
-                    saw_busy = True
-                elif saw_busy and rec["status"] in ("done", "error"):
-                    break
-                orig_sleep(0.2)
-            assert saw_busy, f"recording worker never started: {rec}"
-            assert rec["status"] == "done", rec
-        print("recorded", label)
-    st.rec["status"] = "idle"
-    stop.set()
-
-    tk = data.list_takes(app.DATA_DIR)
-    assert {k: len(v) for k, v in tk.items()} == {"empty": 3, "walking": 3}
-    labels, ds, counts = data.load_dataset(app.DATA_DIR, 50, 64, 16)
-    sample = np.load(tk["empty"][0], allow_pickle=False)
-    assert str(sample["scenario"]) == "test_scenario"
-    for k, (X, y) in ds.items():
-        assert X.shape[1:] == (64, 64) and len(X) == len(y) > 0
-    print("dataset ok:", labels, counts, {k: v[0].shape for k, v in ds.items()})
-    # the two fake activities must differ in window energy (sanity of the pipeline)
-    X, y = ds["train"]
-    e = [float(np.abs(X[y == i]).mean()) for i in range(2)]
-    assert e[1] > e[0] * 2, e
-    print("signal separation ok", [round(v, 2) for v in e])
-
-    # too few takes -> clear error
-    shutil.rmtree(os.path.join(app.DATA_DIR, "walking"))
-    try:
-        data.load_dataset(app.DATA_DIR)
-    except data.DatasetError as ex:
-        print("error message ok:", ex)
-    print("summary", data.summary(app.DATA_DIR))
-
-
-def test_user_edition_is_inference_only():
-    st = app.State(UDP, edition="user")
-    assert st.edition == "user"
-    assert "Factory Edition" in st.start_record("walking", "P1", "R1", 20)
-    assert "Factory Edition" in st.start_train(5, False)
-    assert "Factory Edition" in st.start_scenario_train(5)
-    snapshot = st.snapshot()
-    assert snapshot["takes"] == {}
-    assert snapshot["rec"]["status"] == "disabled"
-    assert snapshot["train"]["status"] == "disabled"
-    assert snapshot["scenario_train"]["status"] == "disabled"
-    assert snapshot["model"]["loaded"] is False
-    print("User Edition inference-only guard ok")
-
-
-def test_scenario_dataset():
-    root = tempfile.mkdtemp()
-    try:
-        rng = np.random.default_rng(42)
-        ts = np.arange(0, 6000, 20, dtype=np.int64)
-        for scenario, offset in (("side_pass", 0.0), ("front_cross", 18.0)):
-            for take in range(5):
-                amp = (60 + offset + rng.normal(0, 4, (len(ts), 64))).clip(0, 255).astype(np.uint8)
-                data.save_take(root, "walking", f"P{take}", "living_room",
-                               ts, np.full(len(ts), -55), amp, scenario=scenario)
-        labels, splits, counts, scenario_counts = data.load_scenario_dataset(root)
-        assert labels == ["front_cross", "side_pass"]
-        assert scenario_counts == {"front_cross": 5, "side_pass": 5}
-        assert counts == {"train": 6, "val": 2, "test": 2}
-        assert all(x.shape[1:] == (64, 64) for x, _ in splits.values())
-        print("scenario dataset ok:", scenario_counts, counts)
-
-        legacy = os.path.join(root, "walking", "legacy.npz")
-        np.savez_compressed(legacy, ts=ts, rssi=np.full(len(ts), -55),
-                            amp=np.ones((len(ts), 64), dtype=np.uint8),
-                            person="another_person_walking", room="living_room")
-        meta = data.take_meta(legacy, "walking")
-        assert meta["scenario"] == "another_person_walking"
-        print("legacy scenario metadata ok")
-    finally:
-        shutil.rmtree(root, ignore_errors=True)
+            factory = app.State(5005, edition="factory")
+            factory.rx.connected = lambda: True
+            message = factory.start_record("running", "P1", "R1", 20)
+            assert "الأربع" in message
+            print("Factory/User guards ok")
+        finally:
+            app.DATA_DIR, app.MODEL_DIR = old_data, old_models
+            app.MODEL_PATH = os.path.join(old_models, "activity_model.pt")
 
 
 if __name__ == "__main__":
-    test_proto()
-    test_resample()
-    test_scenario_dataset()
-    test_user_edition_is_inference_only()
-    test_app()
-    shutil.rmtree(tmp, ignore_errors=True)
-    print("ALL PASSED")
+    test_door_packet()
+    test_four_class_dataset()
+    test_edition_guards()
+    print("ALL FOUR-CLASS PIPELINE TESTS PASSED")

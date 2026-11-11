@@ -10,7 +10,7 @@ WiFi Radar is a research prototype for studying indoor presence and activity sen
 2. Local processing unit — runs the Python application, room baseline, trained activity model, event log, and local HTTP API (default port 8000).
 3. Web dashboard — displays room presence, movement, possible fall events, CSI quality, room calibration, notification preferences, and recent events.
 4. Android app — polls the local processing API and raises Android notifications according to preferences stored on the processing unit.
-5. Separate door node (planned integration) — an ESP32 with HC-SR04 and Buzzer. A single HC-SR04 can detect an object/person in its field of view; it cannot reliably determine entry versus exit. The current Python API reports the door node as not integrated until its dedicated firmware and bridge are completed.
+5. Door sensing — ESP32-S3 firmware supports an HC-SR04 on GPIO4/GPIO5 and an active buzzer through a transistor driver on GPIO6. Door telemetry is sent to the local Python processor over UDP port 5006 when the CSI stream port is 5005. One HC-SR04 detects presence in its field of view; it cannot reliably determine entry versus exit.
 
 The CSI node and door node are separate systems. Their data can be presented together in WiFi Radar, but their sensing logic remains independent.
 
@@ -29,7 +29,7 @@ Launch from the athena directory:
 
 User Edition is the inference-only runtime. It loads a model trained and evaluated by the factory, disables factory recording and training endpoints, requires an empty-room calibration (10 minutes by default), saves a room-specific baseline separately from the trained model, and keeps local detection and event history on the processing unit.
 
-A user package can be created only after the checkpoint contains the four required semantic classes (empty room, person static, movement, and fall), test metrics are present, and a researcher explicitly approves release:
+A user package can be created only after the checkpoint contains exactly four classes (empty room, person standing still, sitting, and movement), test metrics are present, and a researcher explicitly approves release. Fall-event heuristics remain separate and are not a trained class:
 
     python -m athena.package_user --version 1.0.0 --researcher-approved
 
@@ -55,7 +55,7 @@ User Edition collects a 10-minute empty-room baseline. Calibration checks that s
 
 ## Firmware installation
 
-The ESP32-S3 installer page and firmware build are in docs/ and .github/workflows/bulid.yml. Build locally with ESP-IDF 5.4+:
+The ESP32-S3 firmware is built by GitHub Actions in .github/workflows/bulid.yml. The workflow publishes the ESP Web Tools USB installer through GitHub Pages and uploads the merged first-install image plus the OTA update binary as an Actions artifact. First installation uses Chrome/Edge with USB; later updates can be uploaded from the device dashboard. Build locally with ESP-IDF 5.5+:
 
     idf.py set-target esp32s3
     idf.py build flash monitor
@@ -64,9 +64,10 @@ The firmware exposes its own device API (including /api/status, /api/config, and
 
 ## Research data
 
-Current committed sample recordings are exploratory only and do not constitute a trained four-class factory model. There are no real fall recordings in the initial sample set. Collect safe, supervised simulations and negative examples such as sitting down, bending, lying down, and dropping objects. Never ask anyone to perform an actual fall.
+The previous exploratory recordings and incompatible pretrained checkpoint have been removed so the Factory dataset starts clean. Collect only the four approved labels across multiple independent recordings, people, rooms, and sessions. Person static means a person standing without movement; sitting is separate; empty room means nobody is present.
 
 See:
+- HC-SR04 and buzzer wiring: docs/HARDWARE_HC-SR04_BUZZER_AR.md
 - Factory/user release workflow: docs/EDITION_WORKFLOW.md
 - CSI experiments and evaluation: athena/EXPERIMENTS.md
 - Python application guide: athena/README.md
