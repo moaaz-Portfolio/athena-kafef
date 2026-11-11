@@ -77,7 +77,7 @@ def build(version: str, output: Path, researcher_approved: bool) -> Path:
     with tempfile.TemporaryDirectory(prefix="wifi-radar-user-") as temp:
         stage = Path(temp) / "WiFi-Radar-User"
         for relative in RUNTIME_FILES:
-            source = APP / relative.removeprefix("athena/")
+            source = APP / relative
             if not source.is_file():
                 raise SystemExit(f"Required runtime file is missing: {source}")
             destination = stage / relative
