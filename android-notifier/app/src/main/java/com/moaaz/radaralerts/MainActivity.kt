@@ -23,6 +23,7 @@ import java.util.concurrent.Executors
 class MainActivity : Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var serverUrl: EditText
+    private lateinit var apiTokenInput: EditText
     private lateinit var buzzer: CheckBox
     private val switches = linkedMapOf<String, CheckBox>()
 
@@ -68,6 +69,18 @@ class MainActivity : Activity() {
             inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
         }
         root.addView(serverUrl, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        root.addView(TextView(this).apply {
+            text = "رمز الربط المعروض في لوحة الويب على جهاز المعالجة"
+            textSize = 14f
+        })
+        apiTokenInput = EditText(this).apply {
+            hint = "ألصق رمز الربط هنا"
+            setSingleLine(true)
+            setText(prefs.getString("api_token", ""))
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        root.addView(apiTokenInput, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
         val sync = Button(this).apply { text = "مزامنة الإعدادات من الجهاز" }
         root.addView(sync)
@@ -168,7 +181,15 @@ class MainActivity : Activity() {
             Toast.makeText(this, "راجع عنوان الجهاز", Toast.LENGTH_SHORT).show()
             return
         }
-        getSharedPreferences("radar", 0).edit().putString("server_url", base).apply()
+        val token = apiTokenInput.text.toString().trim()
+        if (token.isBlank()) {
+            Toast.makeText(this, "ألصق رمز الربط من لوحة الويب أولًا", Toast.LENGTH_LONG).show()
+            return
+        }
+        getSharedPreferences("radar", 0).edit()
+            .putString("server_url", base)
+            .putString("api_token", token)
+            .apply()
         val notifications = JSONObject()
         switches.forEach { (key, check) -> notifications.put(key, check.isChecked) }
         val outputs = JSONObject().put("buzzer_enabled", buzzer.isChecked)
@@ -200,7 +221,8 @@ class MainActivity : Activity() {
             connection.setRequestProperty("Accept", "application/json")
             if (body != null) {
                 connection.doOutput = true
-                connection.setRequestProperty("X-Athena", "1")
+                val token = getSharedPreferences("radar", 0).getString("api_token", "") ?: ""
+                connection.setRequestProperty("Authorization", "Bearer $token")
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
             }
