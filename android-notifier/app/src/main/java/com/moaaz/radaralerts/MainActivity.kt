@@ -67,7 +67,7 @@ class MainActivity : Activity() {
             hint = "http://192.168.1.100:8000"
             setSingleLine(true)
             setText(prefs.getString("server_url", "http://192.168.1.100:8000"))
-            inputType = android.text.InputType.TYPE_TEXT_VARIATION_URI
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
         }
         root.addView(serverUrl, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
 
