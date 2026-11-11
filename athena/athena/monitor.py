@@ -59,7 +59,8 @@ class PresenceMonitor:
         x = np.asarray(amp, dtype=np.float32)
         if x.ndim != 2 or x.shape[1] != 64 or len(x) < 200:
             raise ValueError("محتاج 200 إطار CSI على الأقل لمعايرة الغرفة")
-        x = x[-min(len(x), 1600):]
+        # Use the full calibration session rather than only the final ~30 seconds.
+        # This makes the 10-minute user calibration a genuine room baseline estimate.
         base = np.median(x, axis=0)
         mad = 1.4826 * np.median(np.abs(x - base[None, :]), axis=0)
         scale = np.maximum(mad, 1.5)
