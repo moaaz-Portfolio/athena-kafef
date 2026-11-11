@@ -15,7 +15,7 @@ import fake_esp  # noqa: E402
 
 ROOMS = {"bedroom": 0, "living": 1, "kitchen": 2}      # each room gets its own static signature
 PERSONS = ("ali", "sara")
-LABELS = ("empty_room", "person_static", "sitting", "movement")
+LABELS = ("empty_room", "person_static", "movement", "fall_detection")
 
 
 def make_dataset(root, takes=3, seconds=6, rate=90):
@@ -88,14 +88,14 @@ def test_run_baseline(crossval_dataset):
 
 
 def test_presence_rates():
-    labels = ["empty_room", "person_static", "sitting", "movement"]
+    labels = ["empty_room", "person_static", "movement", "fall_detection"]
     cm = np.array([[90, 6, 2, 2],     # 10 of 100 empty windows raised an alarm
                    [15, 75, 5, 5],
-                   [20, 5, 65, 10],   # occupied windows classified as empty count as misses
+                   [10, 5, 80, 5],
                    [10, 5, 5, 80]])
     r = crossval.presence_rates(cm, labels)
     assert abs(r["false_alarm_rate"] - 0.10) < 1e-9
-    assert abs(r["miss_rate"] - 45 / 300) < 1e-9
+    assert abs(r["miss_rate"] - 35 / 300) < 1e-9
     assert crossval.presence_rates(cm, ["a", "b", "c"]) is None
     print("presence rates ok")
 

@@ -28,7 +28,7 @@ def test_door_packet():
 
 
 def test_four_class_dataset():
-    assert data.ACTIVITY_LABELS == ("empty_room", "person_static", "sitting", "movement")
+    assert data.ACTIVITY_LABELS == ("empty_room", "person_static", "movement", "fall_detection")
     with tempfile.TemporaryDirectory() as root:
         base = 60 + 25 * np.sin(np.linspace(0, 6, 64))
         ts = np.arange(0, 6000, 20, dtype=np.uint32)

@@ -21,7 +21,7 @@ APP = ROOT / "athena"
 MODEL_DIR = APP / "models"
 MODEL_PATH = MODEL_DIR / "activity_model.pt"
 METRICS_PATH = MODEL_DIR / "metrics.json"
-REQUIRED_LABELS = {"empty_room", "person_static", "sitting", "movement"}
+REQUIRED_LABELS = {"empty_room", "person_static", "movement", "fall_detection"}
 RUNTIME_FILES = [
     "athena/__init__.py", "athena/__main__.py", "athena/app.py",
     "athena/data.py", "athena/edition.py", "athena/live.py",

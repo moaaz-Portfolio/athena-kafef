@@ -10,11 +10,12 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from athena import proto  # noqa: E402
 
+# Schema-test patterns only; these values are not physical fall recordings or accuracy evidence.
 ACTIVITIES = {
     "empty_room": (0.0, 0.3),
     "person_static": (0.08, 1.5),
-    "sitting": (0.16, 2.5),
     "movement": (1.2, 5.0),
+    "fall_detection": (0.65, 9.0),
 }
 
 
@@ -37,7 +38,7 @@ def main():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     labels = list(ACTIVITIES)
     started, sequence = time.time(), 0
-    print("Fake CSI stream: four approved classes; Ctrl+C to stop.")
+    print("Fake CSI schema stream: four approved labels; Ctrl+C to stop.")
     while True:
         elapsed = time.time() - started
         label = labels[int(elapsed // args.hold) % len(labels)]

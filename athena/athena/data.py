@@ -8,7 +8,7 @@ import time
 import numpy as np
 
 FEATURES = 64
-ACTIVITY_LABELS = ("empty_room", "person_static", "sitting", "movement")
+ACTIVITY_LABELS = ("empty_room", "person_static", "movement", "fall_detection")
 
 
 # --------------------------------------------------------------- saving

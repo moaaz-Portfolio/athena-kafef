@@ -29,7 +29,7 @@ Launch from the athena directory:
 
 User Edition is the inference-only runtime. It loads a model trained and evaluated by the factory, disables factory recording and training endpoints, requires an empty-room calibration (10 minutes by default), saves a room-specific baseline separately from the trained model, and keeps local detection and event history on the processing unit.
 
-A user package can be created only after the checkpoint contains exactly four classes (empty room, person standing still, sitting, and movement), test metrics are present, and a researcher explicitly approves release. Fall-event heuristics remain separate and are not a trained class:
+A user package can be created only after the checkpoint contains exactly four classes (empty room, person static, movement, and fall detection), test metrics are present, and a researcher explicitly approves release. Rule-based fall-event heuristics remain an additional experimental cross-check:
 
     python -m athena.package_user --version 1.0.0 --researcher-approved
 
@@ -64,7 +64,7 @@ The firmware exposes its own device API (including /api/status, /api/config, and
 
 ## Research data
 
-The previous exploratory recordings and incompatible pretrained checkpoint have been removed so the Factory dataset starts clean. Collect only the four approved labels across multiple independent recordings, people, rooms, and sessions. Person static means a person standing without movement; sitting is separate; empty room means nobody is present.
+The previous exploratory recordings and incompatible pretrained checkpoint have been removed so the Factory dataset starts clean. Collect only the four approved labels across multiple independent recordings, people, rooms, and sessions. Person static means a person is present but stationary; empty room means nobody is present. Fall-detection data must use safe, controlled simulations and never real falls.
 
 See:
 - HC-SR04 and buzzer wiring: docs/HARDWARE_HC-SR04_BUZZER_AR.md
